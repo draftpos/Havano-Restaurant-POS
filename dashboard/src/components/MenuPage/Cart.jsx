@@ -117,11 +117,6 @@ const Cart = () => {
           const result = await createTransaction("Quotation", customer, items);
           
           if (result && result.success !== false && result.name) {
-            toast.success("Quotation created successfully", {
-              description: `Quotation ID: ${result.name}`,
-              duration: 4000,
-            });
-            
             clearCart();
             
             // Refresh orders if needed

@@ -31,11 +31,6 @@ export function CreateCustomerDialog({ open, onOpenChange, onCustomerCreated, in
       const result = await createCustomer(data.customer_name, data.mobile_no);
       
       if (result && result.success) {
-        toast.success("Customer Created", {
-          description: `Customer ${result.customer_name} created successfully`,
-          duration: 4000,
-        });
-        
         // Call the callback with the new customer
         if (onCustomerCreated) {
           onCustomerCreated({

@@ -176,11 +176,6 @@ const OrderDetailsDialog = ({
         const result = await createTransaction("Quotation", customer, items);
         
         if (result && result.success !== false && result.name) {
-          toast.success("Quotation created successfully", {
-            description: `Quotation ID: ${result.name}`,
-            duration: 4000,
-          });
-          
           if (typeof onClose === "function") {
             onClose();
           }

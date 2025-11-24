@@ -27,7 +27,7 @@ const navLinks = [
     {
         name:"AUTH",
         path:"/auth",
-        active: false,
+        active: true,
     }
 ];
 
