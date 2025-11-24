@@ -26,7 +26,7 @@ const router = createBrowserRouter(
           </ProtectedRoute>
         }
       >
-        <Route index element={<Home />} />
+        <Route index element={<MenuPage />} />
         <Route path="tables">
           <Route index element={<Tables />} />
           <Route path=":id" element={<TableDetails />} />

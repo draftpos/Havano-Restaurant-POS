@@ -239,6 +239,14 @@ const Cart = () => {
       } catch (err) {
         console.error("Failed to refresh orders:", err);
       }
+      
+      // If payment was made for an existing transaction (like converted quotation to sales invoice),
+      // refresh the page to update status
+      if (paymentState.isExistingTransaction) {
+        window.location.reload();
+        return;
+      }
+      
       // Navigate if Dine In, otherwise stay on current page
       if (activeTableId) {
         navigate(`/tables/${activeTableId}`);

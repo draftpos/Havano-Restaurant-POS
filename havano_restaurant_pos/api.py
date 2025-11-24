@@ -375,6 +375,10 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             "Global Defaults", "default_company"
         )
         paid_amount = float(amount) if amount is not None else total
+        
+        # Cap payment amount at total if it exceeds
+        if paid_amount > total:
+            paid_amount = total
         company_currency = frappe.get_value("Company", company, "default_currency")
         paid_from_account = frappe.get_value("Company", company, "default_receivable_account")
         paid_to_account = frappe.get_value("Company", company, "default_cash_account") or paid_from_account
@@ -430,6 +434,9 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             payment_entry.reference_no = None
             payment_entry.reference_date = frappe.utils.nowdate()
             payment_entry.remarks = note or "POS Payment"
+            # Handle "Multi" payment method - use Cash as fallback
+            if payment_method == "Multi":
+                payment_method = "Cash"
             payment_entry.mode_of_payment = payment_method or "Cash"
             payment_entry.insert(ignore_permissions=True)
             payment_entry.submit()
@@ -1044,7 +1051,7 @@ def create_transaction(doctype, customer, items, company=None, order_type=None, 
 
 
 @frappe.whitelist()
-def make_payment_for_transaction(doctype, docname, amount=None, payment_method=None, note=None):
+def make_payment_for_transaction(doctype, docname, amount=None, payment_method=None, note=None, payment_breakdown=None):
     """Make payment for an existing Sales Invoice or Quotation.
     
     Args:
@@ -1053,6 +1060,7 @@ def make_payment_for_transaction(doctype, docname, amount=None, payment_method=N
         amount: Payment amount (optional, defaults to outstanding amount)
         payment_method: Mode of payment (optional, defaults to "Cash")
         note: Payment notes (optional)
+        payment_breakdown: List of dicts with payment_method and amount (optional, for multiple payment methods)
     """
     try:
         # Get the document
@@ -1091,10 +1099,51 @@ def make_payment_for_transaction(doctype, docname, amount=None, payment_method=N
         # Calculate outstanding amount
         outstanding_amount = doc.outstanding_amount if hasattr(doc, 'outstanding_amount') else doc.grand_total
         
-        # Use provided amount or outstanding amount
-        paid_amount = float(amount) if amount is not None else float(outstanding_amount)
+        # Parse payment breakdown if provided, or parse from note if payment_method is "Multi"
+        payments_list = []
+        if payment_breakdown:
+            if isinstance(payment_breakdown, str):
+                import json
+                payment_breakdown = frappe.parse_json(payment_breakdown)
+            payments_list = payment_breakdown
+        elif payment_method == "Multi" and note:
+            # Parse payment breakdown from note (format: "Cash:50, Card:30")
+            import re
+            breakdown_pattern = r'([^:]+):([0-9.]+)'
+            matches = re.findall(breakdown_pattern, note)
+            for method, amt in matches:
+                method = method.strip()
+                try:
+                    amt = float(amt)
+                    if amt > 0:
+                        payments_list.append({"payment_method": method, "amount": amt})
+                except (ValueError, TypeError):
+                    continue
         
-        if paid_amount <= 0:
+        # If we have multiple payments, use breakdown; otherwise use single payment
+        if payments_list and len(payments_list) > 0:
+            # Multiple payment methods - create separate payment entries
+            total_paid = sum(float(p.get("amount", 0)) for p in payments_list)
+            if total_paid > float(outstanding_amount):
+                # Scale down proportionally if total exceeds outstanding
+                scale_factor = float(outstanding_amount) / total_paid
+                for p in payments_list:
+                    p["amount"] = float(p.get("amount", 0)) * scale_factor
+                total_paid = float(outstanding_amount)
+        else:
+            # Single payment method
+            paid_amount = float(amount) if amount is not None else float(outstanding_amount)
+            # Cap payment amount at outstanding amount if it exceeds
+            if paid_amount > float(outstanding_amount):
+                paid_amount = float(outstanding_amount)
+            
+            # Handle "Multi" payment method - use Cash as fallback
+            if payment_method == "Multi":
+                payment_method = "Cash"
+            
+            payments_list = [{"payment_method": payment_method or "Cash", "amount": paid_amount}]
+        
+        if not payments_list or sum(float(p.get("amount", 0)) for p in payments_list) <= 0:
             return {
                 "success": False,
                 "message": "Payment amount must be greater than 0",
@@ -1123,74 +1172,102 @@ def make_payment_for_transaction(doctype, docname, amount=None, payment_method=N
         
         paid_from_currency = get_account_currency(paid_from_account, company_currency)
         paid_to_currency = get_account_currency(paid_to_account, company_currency)
-        source_exchange_rate = 1.0
-        target_exchange_rate = 1.0
-        received_amount = paid_amount
         
-        if paid_from_currency != paid_to_currency:
+        # Create payment entries for each payment method
+        created_payments = []
+        remaining_outstanding = float(outstanding_amount)
+        
+        for payment_info in payments_list:
+            method = payment_info.get("payment_method", "Cash")
+            paid_amount = float(payment_info.get("amount", 0))
+            
+            if paid_amount <= 0:
+                continue
+            
+            # Cap individual payment at remaining outstanding
+            if paid_amount > remaining_outstanding:
+                paid_amount = remaining_outstanding
+            
+            if paid_amount <= 0:
+                continue
+            
+            source_exchange_rate = 1.0
+            target_exchange_rate = 1.0
+            received_amount = paid_amount
+            
+            if paid_from_currency != paid_to_currency:
+                try:
+                    from erpnext.setup.utils import get_exchange_rate
+                    target_exchange_rate = get_exchange_rate(
+                        paid_from_currency, paid_to_currency, frappe.utils.nowdate()
+                    )
+                    received_amount = paid_amount * target_exchange_rate
+                except Exception as e:
+                    frappe.log_error(
+                        f"Could not get exchange rate for {paid_from_currency} -> {paid_to_currency}: {str(e)}",
+                        "Payment Entry Exchange Rate"
+                    )
+                    target_exchange_rate = 1.0
+                    received_amount = paid_amount
+            
+            # Create payment entry
             try:
-                from erpnext.setup.utils import get_exchange_rate
-                target_exchange_rate = get_exchange_rate(
-                    paid_from_currency, paid_to_currency, frappe.utils.nowdate()
+                payment_entry = frappe.new_doc("Payment Entry")
+                payment_entry.payment_type = "Receive"
+                payment_entry.party_type = "Customer"
+                payment_entry.party = customer
+                payment_entry.company = company
+                payment_entry.posting_date = frappe.utils.nowdate()
+                payment_entry.paid_from = paid_from_account
+                payment_entry.paid_to = paid_to_account
+                payment_entry.paid_from_account_currency = paid_from_currency
+                payment_entry.paid_to_account_currency = paid_to_currency
+                payment_entry.paid_amount = paid_amount
+                payment_entry.received_amount = received_amount
+                payment_entry.source_exchange_rate = source_exchange_rate
+                payment_entry.target_exchange_rate = target_exchange_rate
+                payment_entry.reference_no = None
+                payment_entry.reference_date = frappe.utils.nowdate()
+                payment_entry.remarks = note or f"Payment for {doctype} {docname} - {method}"
+                payment_entry.mode_of_payment = method
+                
+                # Add reference to the Sales Invoice
+                payment_entry.append(
+                    "references",
+                    {
+                        "reference_doctype": doctype,
+                        "reference_name": docname,
+                        "allocated_amount": paid_amount,
+                    },
                 )
-                received_amount = paid_amount * target_exchange_rate
+                
+                payment_entry.insert(ignore_permissions=True)
+                payment_entry.submit()
+                created_payments.append(payment_entry.name)
+                remaining_outstanding -= paid_amount
+                
             except Exception as e:
-                frappe.log_error(
-                    f"Could not get exchange rate for {paid_from_currency} -> {paid_to_currency}: {str(e)}",
-                    "Payment Entry Exchange Rate"
-                )
-                target_exchange_rate = 1.0
-                received_amount = paid_amount
+                title = f"Error creating payment entry for {method}"
+                frappe.log_error(frappe.get_traceback(), title)
+                # Continue with other payment methods even if one fails
+                continue
         
-        # Create payment entry
-        try:
-            payment_entry = frappe.new_doc("Payment Entry")
-            payment_entry.payment_type = "Receive"
-            payment_entry.party_type = "Customer"
-            payment_entry.party = customer
-            payment_entry.company = company
-            payment_entry.posting_date = frappe.utils.nowdate()
-            payment_entry.paid_from = paid_from_account
-            payment_entry.paid_to = paid_to_account
-            payment_entry.paid_from_account_currency = paid_from_currency
-            payment_entry.paid_to_account_currency = paid_to_currency
-            payment_entry.paid_amount = paid_amount
-            payment_entry.received_amount = received_amount
-            payment_entry.source_exchange_rate = source_exchange_rate
-            payment_entry.target_exchange_rate = target_exchange_rate
-            payment_entry.reference_no = None
-            payment_entry.reference_date = frappe.utils.nowdate()
-            payment_entry.remarks = note or f"Payment for {doctype} {docname}"
-            payment_entry.mode_of_payment = payment_method or "Cash"
-            
-            # Add reference to the Sales Invoice
-            payment_entry.append(
-                "references",
-                {
-                    "reference_doctype": doctype,
-                    "reference_name": docname,
-                    "allocated_amount": paid_amount,
-                },
-            )
-            
-            payment_entry.insert(ignore_permissions=True)
-            payment_entry.submit()
-            frappe.db.commit()
-            
-            return {
-                "success": True,
-                "message": f"Payment created successfully for {doctype} {docname}",
-                "payment_entry": payment_entry.name,
-                "transaction": docname,
-            }
-        except Exception as e:
-            title = "Error creating payment entry"
-            frappe.log_error(frappe.get_traceback(), title)
+        frappe.db.commit()
+        
+        if not created_payments:
             return {
                 "success": False,
-                "message": "Failed to create payment entry",
-                "details": str(e),
+                "message": "Failed to create payment entries",
+                "details": "No payment entries were created. Please check payment methods and amounts.",
             }
+        
+        return {
+            "success": True,
+            "message": f"Payment created successfully for {doctype} {docname}",
+            "payment_entry": created_payments[0] if len(created_payments) == 1 else created_payments,
+            "payment_entries": created_payments,
+            "transaction": docname,
+        }
     
     except Exception as e:
         title = "Error in make_payment_for_transaction"

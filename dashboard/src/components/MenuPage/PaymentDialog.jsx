@@ -102,6 +102,8 @@ export default function PaymentDialog({
   }, [cartItems, paymentMethods]);
 
   const setPaymentAmount = (method, val) => {
+    // Allow users to enter any value (including values greater than total)
+    // The capping will happen when creating the payment entry
     setPaymentAmounts((s) => ({ ...s, [method]: String(val) }));
   };
 
@@ -127,12 +129,36 @@ export default function PaymentDialog({
   const handlePay = async () => {
     setLoading(true);
     try {
-      const paidTotal = sumPayments();
+      let paidTotal = sumPayments();
+      
+      // Get payment breakdown for multiple methods
+      let paymentBreakdown = Object.entries(paymentAmounts)
+        .filter(([k, v]) => parseFloat(v) > 0)
+        .map(([k, v]) => ({
+          payment_method: k,
+          amount: parseFloat(v) || 0
+        }));
 
-      // create a small breakdown note
+      // Cap payment amounts at total if total exceeds invoice total
+      if (paidTotal > total && paymentBreakdown.length > 0) {
+        // Scale down proportionally if total exceeds
+        const scaleFactor = total / paidTotal;
+        paymentBreakdown = paymentBreakdown.map(p => ({
+          ...p,
+          amount: p.amount * scaleFactor
+        }));
+        paidTotal = total;
+      }
+
+      // create a small breakdown note (use original amounts for display, but capped amounts for payment)
       const breakdown = Object.entries(paymentAmounts)
         .filter(([k, v]) => parseFloat(v) > 0)
-        .map(([k, v]) => `${k}:${v}`)
+        .map(([k, v]) => {
+          // Find the capped amount from paymentBreakdown if it exists
+          const cappedPayment = paymentBreakdown.find(p => p.payment_method === k);
+          const displayAmount = cappedPayment ? cappedPayment.amount : parseFloat(v);
+          return `${k}:${displayAmount.toFixed(2)}`;
+        })
         .join(", ");
 
       const payment_method = breakdown.split(",").length > 1 ? "Multi" : (Object.entries(paymentAmounts).find(([,v]) => parseFloat(v) > 0)?.[0] || "Cash");
@@ -148,7 +174,8 @@ export default function PaymentDialog({
           transactionName,
           paidTotal > 0 ? paidTotal : null,
           payment_method,
-          fullNote
+          fullNote,
+          paymentBreakdown.length > 1 ? paymentBreakdown : null
         );
       } else {
         // Create new order and payment (original flow)

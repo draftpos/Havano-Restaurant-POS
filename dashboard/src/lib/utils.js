@@ -340,8 +340,9 @@ export async function createOrderAndPay(payload, amount = null, payment_method =
  * @param {number} amount - Payment amount (optional)
  * @param {string} payment_method - Mode of payment (optional)
  * @param {string} note - Payment notes (optional)
+ * @param {Array} payment_breakdown - Array of {payment_method, amount} objects for multiple payments (optional)
  */
-export async function makePaymentForTransaction(doctype, docname, amount = null, payment_method = null, note = null) {
+export async function makePaymentForTransaction(doctype, docname, amount = null, payment_method = null, note = null, payment_breakdown = null) {
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
@@ -352,6 +353,7 @@ export async function makePaymentForTransaction(doctype, docname, amount = null,
           amount,
           payment_method,
           note,
+          payment_breakdown,
         }
       );
       return message;

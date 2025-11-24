@@ -19,7 +19,6 @@ const TransactionCategories = () => {
   const [categoryColors, setCategoryColors] = useState({});
 
   const categories = useMemo(() => [
-    { name: "Sales Invoice", label: "Sales Invoice", doctype: "Sales Invoice" },
     { name: "Quotation", label: "Quotation", doctype: "Quotation" },
   ], []);
 

@@ -1,7 +1,6 @@
-import { Edit, CreditCard, FileText } from "lucide-react";
-import { useState } from "react";
+import { Edit, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { formatCurrency, convertQuotationToSalesInvoice } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { useTransactionStore } from "@/stores/useTransactionStore";
 import { useCartStore } from "@/stores/useCartStore";
 
@@ -12,44 +11,23 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
-import PaymentDialog from "../MenuPage/PaymentDialog";
 
 const TransactionDetails = () => {
   const navigate = useNavigate();
-  const { selectedTransaction, transactionItems, loadingItems, selectedCategory, fetchTransactions, setSelectedTransaction, setSelectedCategory, fetchTransactionItems } = useTransactionStore();
+  const { selectedTransaction, transactionItems, loadingItems, selectedCategory } = useTransactionStore();
   const { loadCartFromQuotation, clearCart } = useCartStore();
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [converting, setConverting] = useState(false);
 
   const handleEdit = () => {
-    if (selectedTransaction && selectedCategory?.doctype) {
-      // Convert doctype to slug format
-      const doctypeSlug = selectedCategory.doctype === "Sales Invoice" 
-        ? "sales-invoice" 
-        : selectedCategory.doctype === "Quotation"
-        ? "quotation"
-        : selectedCategory.doctype.toLowerCase().replace(/\s+/g, '-');
+    if (selectedTransaction) {
       const name = selectedTransaction.name;
-      // Open Frappe form in new tab
-      const url = `/app/${encodeURIComponent(doctypeSlug)}/${encodeURIComponent(name)}`;
+      // Open Quotation form in new tab
+      const url = `/app/quotation/${encodeURIComponent(name)}`;
       window.open(url, '_blank');
     }
   };
 
-  const handleMakePayment = () => {
-    setPaymentDialogOpen(true);
-  };
-
-  const handlePaymentPaid = async () => {
-    // Refresh transactions after payment
-    if (selectedCategory?.doctype) {
-      await fetchTransactions(selectedCategory.doctype);
-    }
-    setPaymentDialogOpen(false);
-  };
-
   const handleConvertToSalesInvoice = async () => {
-    if (!selectedTransaction || selectedCategory?.doctype !== "Quotation") {
+    if (!selectedTransaction) {
       return;
     }
 
@@ -65,15 +43,6 @@ const TransactionDetails = () => {
       alert("Failed to load quotation to menu page");
     }
   };
-
-  // Convert transaction items to cart items format
-  const cartItems = transactionItems.map((item) => ({
-    name: item.item_code || item.name,
-    item_name: item.item_name || item.item_code || "N/A",
-    quantity: item.qty || item.quantity || 1,
-    price: item.rate || item.price || item.amount || 0,
-    standard_rate: item.rate || item.price || item.amount || 0,
-  }));
 
   if (!selectedTransaction) {
     return (
@@ -106,18 +75,15 @@ const TransactionDetails = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {selectedCategory?.doctype === "Quotation" && (
-              <Button
-                onClick={handleConvertToSalesInvoice}
-                variant="default"
-                size="sm"
-                className="flex items-center gap-2"
-                disabled={converting}
-              >
-                <FileText size={16} />
-                {converting ? "Converting..." : "Convert to Sales Invoice"}
-              </Button>
-            )}
+            <Button
+              onClick={handleConvertToSalesInvoice}
+              variant="default"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <FileText size={16} />
+              Convert to Sales Invoice
+            </Button>
             <Button
               onClick={handleEdit}
               variant="outline"
@@ -169,32 +135,13 @@ const TransactionDetails = () => {
       </CardContent>
       <hr className="border border-gray-600" />
       <CardContent>
-        <div className="flex justify-between items-center mb-3">
+        <div className="flex justify-between items-center">
           <span className="text-lg font-bold">Total:</span>
           <span className="text-xl font-bold text-primary">
             {formatCurrency(selectedTransaction.grand_total)}
           </span>
         </div>
-        <Button
-          onClick={handleMakePayment}
-          className="w-full flex items-center justify-center gap-2"
-          size="lg"
-        >
-          <CreditCard size={18} />
-          Make Payment
-        </Button>
       </CardContent>
-      <PaymentDialog
-        open={paymentDialogOpen}
-        onOpenChange={setPaymentDialogOpen}
-        onPaid={handlePaymentPaid}
-        cartItems={cartItems}
-        customer={selectedTransaction.customer || ""}
-        orderId={selectedTransaction.name}
-        isExistingTransaction={true}
-        transactionDoctype={selectedCategory.doctype}
-        transactionName={selectedTransaction.name}
-      />
     </Card>
   );
 };

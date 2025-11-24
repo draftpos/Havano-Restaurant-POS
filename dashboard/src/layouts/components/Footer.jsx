@@ -22,21 +22,36 @@ const Footer = () => {
       <Container>
         <div className="py-4">
           <div className="flex items-center justify-between">
-            {navLinks.map((link) => (
-              <NavLink
-                to={link.path}
-                key={link.name}
-                end
-                onClick={(e) => handleNavClick(e, link)}
-                className={({ isActive }) =>
-                  isActive
-                    ? "text-primary font-semibold border-y-2 border-primary py-1 transition-colors"
-                    : "text-primary/70 hover:text-primary hover:border-b-2 hover:border-primary py-1 transition-colors"
-                }
-              >
-                {link.name}
-              </NavLink>
-            ))}
+            {navLinks.map((link) => {
+              if (!link.active) {
+                // Render disabled/non-active links
+                return (
+                  <span
+                    key={link.name}
+                    className="text-gray-400 cursor-not-allowed py-1 opacity-50"
+                  >
+                    {link.name}
+                  </span>
+                );
+              }
+              
+              // Render active links
+              return (
+                <NavLink
+                  to={link.path}
+                  key={link.name}
+                  end
+                  onClick={(e) => handleNavClick(e, link)}
+                  className={({ isActive }) =>
+                    isActive
+                      ? "text-primary font-semibold border-y-2 border-primary py-1 transition-colors"
+                      : "text-primary/70 hover:text-primary hover:border-b-2 hover:border-primary py-1 transition-colors"
+                  }
+                >
+                  {link.name}
+                </NavLink>
+              );
+            })}
           </div>
         </div>
       </Container>

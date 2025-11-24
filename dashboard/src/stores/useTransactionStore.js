@@ -5,9 +5,9 @@ import { db } from "@/lib/frappeClient";
 export const useTransactionStore = create((set) => ({
   transactions: [],
   selectedCategory: {
-    id: "Sales Invoice",
-    name: "Sales Invoice",
-    doctype: "Sales Invoice",
+    id: "Quotation",
+    name: "Quotation",
+    doctype: "Quotation",
   },
   selectedTransaction: null,
   transactionItems: [],
@@ -23,22 +23,25 @@ export const useTransactionStore = create((set) => ({
   }),
   setSelectedTransaction: (transaction) => set({ selectedTransaction: transaction }),
 
-  fetchTransactions: async (doctype) => {
+  fetchTransactions: async (doctype, dateFilter = null) => {
     set({ loading: true, error: null });
     try {
-      // Quotation uses transaction_date, Sales Invoice uses posting_date
-      const dateField = doctype === "Quotation" ? "transaction_date" : "posting_date";
+      // Only handle Quotation now
+      const dateField = "transaction_date";
+      const fields = ["name", "party_name", "customer_name", "grand_total", "status", dateField, "currency", "creation"];
       
-      // Quotation uses party_name for customer, Sales Invoice uses customer
-      const customerField = doctype === "Quotation" ? "party_name" : "customer";
-      const fields = doctype === "Quotation" 
-        ? ["name", "party_name", "customer_name", "grand_total", "status", dateField, "currency"]
-        : ["name", "customer", "grand_total", "status", dateField, "currency"];
+      // Build filters - Frappe uses array format for filters
+      const filters = [];
+      if (dateFilter) {
+        // Filter by date - use transaction_date for Quotation
+        filters.push([dateField, "=", dateFilter]);
+      }
       
-      const data = await db.getDocList(doctype, {
+      const data = await db.getDocList("Quotation", {
         fields: fields,
+        filters: filters.length > 0 ? filters : undefined,
         orderBy: {
-          field: dateField,
+          field: "creation",
           order: "desc",
         },
         limit: 100,
@@ -47,11 +50,9 @@ export const useTransactionStore = create((set) => ({
       // Map the data to a consistent format
       const mappedData = data.map((item) => ({
         ...item,
-        posting_date: item[dateField] || item.posting_date || item.transaction_date,
+        posting_date: item.transaction_date || item.posting_date,
         // For Quotation, use customer_name if available, otherwise party_name
-        customer: doctype === "Quotation" 
-          ? (item.customer_name || item.party_name || "")
-          : (item.customer || ""),
+        customer: item.customer_name || item.party_name || "",
       }));
       
       set({ transactions: mappedData, loading: false });
@@ -64,9 +65,8 @@ export const useTransactionStore = create((set) => ({
   fetchTransactionItems: async (doctype, transactionName) => {
     set({ loadingItems: true, error: null });
     try {
-      const doc = await db.getDoc(doctype, transactionName);
-      const itemsField = doctype === "Sales Invoice" ? "items" : "items";
-      const items = doc[itemsField] || [];
+      const doc = await db.getDoc("Quotation", transactionName);
+      const items = doc.items || [];
       set({ transactionItems: items, loadingItems: false });
     } catch (err) {
       console.error("Transaction items fetch error:", err);
