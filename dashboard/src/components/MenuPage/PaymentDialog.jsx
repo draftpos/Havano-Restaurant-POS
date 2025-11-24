@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import Keyboard from "@/components/ui/Keyboard";
 import { Textarea } from "@/components/ui/textarea";
-import { createOrderAndPay, makePaymentForTransaction } from "@/lib/utils";
+import { createOrderAndPay, makePaymentForTransaction,get_invoice_json } from "@/lib/utils";
 import { db } from "@/lib/frappeClient";
 
 export default function PaymentDialog({
@@ -142,6 +142,27 @@ export default function PaymentDialog({
       let res;
       
       if (isExistingTransaction && transactionDoctype && transactionName) {
+      try {
+      const res = await get_invoice_json(transactionName);
+      console.log("Invoice JSON returned from backend:", res);
+
+      // Convert JSON to string
+      const jsonStr = JSON.stringify(res, null, 2); // pretty-print with 2 spaces
+
+      // Create a blob
+      const blob = new Blob([jsonStr], { type: "text/plain" });
+
+      // Create a download link
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${transactionName}.txt`; // name the file as invoice name
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Error fetching invoice JSON:", error);
+    }
+
         // Make payment for existing Sales Invoice or Quotation
         res = await makePaymentForTransaction(
           transactionDoctype,
@@ -171,6 +192,7 @@ export default function PaymentDialog({
       if (res && res.success) {
         if (typeof onPaid === "function") onPaid(res);
         if (typeof onOpenChange === "function") onOpenChange(false);
+        console.log("payment correct");
       } else {
         console.error("Payment failed", res);
       }

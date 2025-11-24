@@ -333,6 +333,7 @@ export async function createOrderAndPay(payload, amount = null, payment_method =
   );
 }
 
+
 /**
  * Make payment for an existing Sales Invoice or Quotation.
  * @param {string} doctype - "Sales Invoice" or "Quotation"
@@ -342,6 +343,7 @@ export async function createOrderAndPay(payload, amount = null, payment_method =
  * @param {string} note - Payment notes (optional)
  */
 export async function makePaymentForTransaction(doctype, docname, amount = null, payment_method = null, note = null) {
+  console.log("Making payment for transaction:", { doctype, docname, amount, payment_method, note });
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
@@ -422,6 +424,7 @@ export async function convertQuotationToSalesInvoiceFromCart(quotationName, item
  * @param {string} customerName - Customer display name for HA Order (optional)
  */
 export async function createTransaction(doctype, customer, items, company = null, orderType = null, table = null, waiter = null, customerName = null) {
+  console.log("Creating transaction:", { doctype, customer, items, company, orderType, table, waiter, customerName });
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
@@ -474,5 +477,44 @@ export async function createCustomer(customerName, mobileNo = null) {
       return message;
     },
     "Create Customer"
+  );
+}
+
+
+/**
+ * Get a invoice data.
+ * @param {string} invoice_name 
+ */
+export async function get_invoice_json(invoice_name) {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.get_invoice_json",
+        {
+          invoice_name: invoice_name,
+        }
+      );
+      return message;
+    },
+    "get invoice json"
+  );
+}
+
+/**
+ * Create a new customer.
+ * @param {string} quote_number - Customer name (required)
+ */
+export async function generate_quotation_json(quote_number) {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.generate_quotation_json",
+        {
+          quote_id: quote_number,
+        }
+      );
+      return message;
+    },
+    "get invoice json"
   );
 }

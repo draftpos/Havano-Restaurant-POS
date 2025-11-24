@@ -18,6 +18,7 @@ import {
 } from "../ui/card";
 import UpdateCartDialog from "./UpdateCartDialog";
 import PaymentDialog from "./PaymentDialog";
+import { generate_quotation_json } from "@/lib/utils";
 
 const Cart = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +43,7 @@ const Cart = () => {
 
   const handleSubmitOrder = async (cart) => {
     console.log("🔵 handleSubmitOrder called");
-    console.log("  orderType:", orderType);
+    console.log("  orderTypes:", orderType);
     console.log("  transactionType:", transactionType);
     console.log("  activeOrderId:", activeOrderId);
     console.log("  cart.length:", cart?.length);
@@ -83,8 +84,8 @@ const Cart = () => {
             customerName || customer
           );
           
-          if (result && result.success !== false && result.sales_invoice) {
-            // Sales Invoice created, open payment dialog
+          if (result && result.success !== false && result.sales_invoice) { 
+            console.log("🔵 Quotation converted to Sales Invoice:", result.sales_invoice);
             setPaymentState({
               open: true,
               orderId: null,
@@ -117,6 +118,28 @@ const Cart = () => {
           const result = await createTransaction("Quotation", customer, items);
           
           if (result && result.success !== false && result.name) {
+            console.log("QUote created here bro" + result.name);
+             try {
+                  const res = await generate_quotation_json(result.name);
+                  console.log("Quote JSON returned from backend:", res);
+            
+                  // Convert JSON to string
+                  const jsonStr = JSON.stringify(res, null, 2); // pretty-print with 2 spaces
+            
+                  // Create a blob
+                  const blob = new Blob([jsonStr], { type: "text/plain" });
+            
+                  // Create a download link
+                  const link = document.createElement("a");
+                  link.href = URL.createObjectURL(blob);
+                  link.download = `${result.name}.txt`; // name the file as invoice name
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                } catch (error) {
+                  console.error("Error fetching invoice JSON:", error);
+                }
+
             toast.success("Quotation created successfully", {
               description: `Quotation ID: ${result.name}`,
               duration: 4000,
