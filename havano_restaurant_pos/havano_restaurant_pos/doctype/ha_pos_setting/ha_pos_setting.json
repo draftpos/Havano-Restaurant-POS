@@ -1,0 +1,63 @@
+{
+  "doctype": "DocType",
+  "name": "HA POS Setting",
+  "module": "Havano Restaurant Pos",
+  "fields": [
+    {
+      "fieldname": "ha_pos_settings_on",
+      "fieldtype": "Check",
+      "label": "HA POS Settings On",
+      "default": 0
+    },
+    {
+      "fieldname": "ha_on_pres_enter",
+      "fieldtype": "Select",
+      "label": "On Press Enter",
+      "options": "\nnextrow\ntoqty",
+      "default": "Move to Next Row"
+    },
+    {
+      "fieldname": "default_customer",
+      "fieldtype": "Link",
+      "label": "Default Customer",
+      "options": "Customer"
+    },
+    {
+      "fieldname": "default_price_list",
+      "fieldtype": "Link",
+      "label": "Default Price List",
+      "options": "Price List"
+    },
+    {
+      "fieldname": "default_payment_method",
+      "fieldtype": "Link",
+      "label": "Default Payment Method",
+      "default": "Cash",
+      "options": "Mode of Payment"
+    },
+    {
+      "fieldname": "selected_payment_methods",
+      "fieldtype": "Table",
+      "label": "Selected Payment Methods",
+      "options": "HA POS Payment Method"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "permlevel": 0,
+      "read": 1,
+      "write": 0,
+      "create": 0,
+      "delete": 0
+    }
+  ]
+}

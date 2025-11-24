@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-06 23:14:07.227371",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "menu_item_group",
+  "default_dine_in_customer",
+  "allow_staff_to_change_prices",
+  "allow_staff_to_void_orders",
+  "column_break_paee",
+  "default_account",
+  "default_take_away_customer"
+ ],
+ "fields": [
+  {
+   "fieldname": "menu_item_group",
+   "fieldtype": "Link",
+   "label": "Menu Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "default_dine_in_customer",
+   "fieldtype": "Link",
+   "label": "Default Dine In Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "default_take_away_customer",
+   "fieldtype": "Link",
+   "label": "Default Take Away Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "default_account",
+   "fieldtype": "Link",
+   "label": "Default Account",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_staff_to_change_prices",
+   "fieldtype": "Check",
+   "label": "Allow Staff to Change Prices"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_staff_to_void_orders",
+   "fieldtype": "Check",
+   "label": "Allow Staff to Void Orders"
+  },
+  {
+   "fieldname": "column_break_paee",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2025-10-31 11:03:58.930012",
+ "modified_by": "Administrator",
+ "module": "Havano Restaurant Pos",
+ "name": "Sample POS Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Waiter",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Cashier",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

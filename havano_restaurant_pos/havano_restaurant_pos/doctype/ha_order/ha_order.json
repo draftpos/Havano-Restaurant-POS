@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "autoname": "format:KOT-{DD}-{MM}-{YY}-{##}",
+ "creation": "2025-10-05 23:01:07.013906",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "amended_from",
+  "column_break_vtmw",
+  "order_status",
+  "sales_invoice",
+  "payment_entry",
+  "section_break_ctbl",
+  "order_type",
+  "waiter",
+  "column_break_humi",
+  "customer_name",
+  "table",
+  "section_break_gagh",
+  "order_items",
+  "section_break_jxej",
+  "column_break_cpnr",
+  "column_break_ktwu",
+  "column_break_mopb",
+  "total_price"
+ ],
+ "fields": [
+  {
+   "fieldname": "order_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Order Type",
+   "options": "Dine In\nTake Away"
+  },
+  {
+   "fieldname": "waiter",
+   "fieldtype": "Link",
+   "label": "Waiter",
+   "mandatory_depends_on": "eval:doc.order_type === 'Dine In'",
+   "options": "HA Waiter"
+  },
+  {
+   "fieldname": "column_break_humi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  },
+  {
+   "fieldname": "table",
+   "fieldtype": "Link",
+   "label": "Table",
+   "mandatory_depends_on": "eval:doc.order_type === 'Dine In'",
+   "options": "HA Table"
+  },
+  {
+   "fieldname": "section_break_gagh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "order_items",
+   "fieldtype": "Table",
+   "label": "Order Items",
+   "options": "HA Order Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_jxej",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_cpnr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ktwu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_mopb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_price",
+   "fieldtype": "Currency",
+   "label": "Total Price",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "HA Order",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_vtmw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_ctbl",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Open",
+   "fieldname": "order_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Order Status",
+   "options": "Open\nClosed\nVoided"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-10-31 11:05:31.647826",
+ "modified_by": "Administrator",
+ "module": "Havano Restaurant Pos",
+ "name": "HA Order",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Waiter",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

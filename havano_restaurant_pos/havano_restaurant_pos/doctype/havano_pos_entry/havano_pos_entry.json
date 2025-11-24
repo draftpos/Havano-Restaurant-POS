@@ -1,0 +1,65 @@
+{
+  "doctype": "DocType",
+  "name": "Havano POS Entry",
+  "module": "Havano Restaurant Pos",
+  "is_submittable": 1,
+  "fields": [
+    {
+      "fieldname": "invoice_number",
+      "label": "Invoice Number",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "invoice_date",
+      "label": "Invoice Date",
+      "fieldtype": "Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "payment_method",
+      "label": "Payment Method",
+      "fieldtype": "Link",
+      "options": "Mode of Payment",
+      "reqd": 1
+    },
+    {
+      "fieldname": "amount",
+      "label": "Amount",
+      "fieldtype": "Currency",
+      "reqd": 1
+    },
+    {
+      "fieldname": "currency",
+      "label": "Currency",
+      "fieldtype": "Link",
+      "options": "Currency",
+      "default": "USD"
+    },
+    {
+      "fieldname": "shift_name",
+      "label": "Shift Name",
+      "fieldtype": "Link",
+      "options": "Havano POS Shift",
+      "reqd": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}

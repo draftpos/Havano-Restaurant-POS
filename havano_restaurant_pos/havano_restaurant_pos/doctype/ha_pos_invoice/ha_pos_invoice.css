@@ -1,0 +1,33 @@
+body,
+#body,
+.main-section{
+    background-color: white !important;
+}
+/* Make table cells more clickable for quick search */
+.grid-row .data-row td {
+    cursor: text;
+}
+
+.grid-row .data-row td[data-fieldname="item_code"] {
+    cursor: pointer;
+    background-color: #f8f9fa;
+}
+
+.grid-row .data-row td[data-fieldname="item_code"]:hover {
+    background-color: #e3f2fd;
+}
+
+/* Style the edit pen to make it more obvious */
+.grid-row .row-index .edit-row {
+    color: #007bff;
+    font-size: 14px;
+}
+
+.grid-row .row-index .edit-row:hover {
+    color: #0056b3;
+}
+
+.grid-heading-row{
+    background-color: #0056b3;
+    color: #e3f2fd;
+}

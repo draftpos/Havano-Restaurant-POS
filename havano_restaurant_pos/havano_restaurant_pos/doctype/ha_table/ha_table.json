@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "autoname": "format:TABLE-{###}",
+ "creation": "2025-10-05 21:24:02.597700",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "table_number",
+  "column_break_zpmi",
+  "capacity",
+  "section_break_myfr",
+  "status",
+  "assigned_waiter",
+  "column_break_wpbu",
+  "floor",
+  "customer_name"
+ ],
+ "fields": [
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "table_number",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Table Number",
+   "non_negative": 1,
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_zpmi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_in_quick_entry": 1,
+   "fieldname": "capacity",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Capacity",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Available\nOccupied\nBooked"
+  },
+  {
+   "fieldname": "section_break_myfr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_wpbu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "floor",
+   "fieldtype": "Link",
+   "label": "Floor",
+   "options": "HA Floor"
+  },
+  {
+   "fieldname": "assigned_waiter",
+   "fieldtype": "Link",
+   "label": "Assigned Waiter",
+   "options": "HA Waiter"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-10-31 11:03:10.486563",
+ "modified_by": "Administrator",
+ "module": "Havano Restaurant Pos",
+ "name": "HA Table",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Waiter",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Cashier",
+   "share": 1
+  }
+ ],
+ "quick_entry": 1,
+ "row_format": "Dynamic",
+ "search_fields": "table_number",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [
+  {
+   "color": "Green",
+   "title": "Available"
+  },
+  {
+   "color": "Red",
+   "title": "Occupied"
+  },
+  {
+   "color": "Yellow",
+   "title": "Booked"
+  }
+ ]
+}

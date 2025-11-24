@@ -1,0 +1,104 @@
+{
+  "actions": [],
+  "allow_import": 1,
+  "creation": "2025-01-27 10:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "customer_row",
+    "customer",
+    "column_break_1",
+    "pricelist",
+    "column_break_2",
+    "sub_total",
+    "items_section",
+    "items"
+  ],
+  "fields": [
+    {
+      "fieldname": "customer_row",
+      "fieldtype": "Section Break",
+      "options": "inline"
+    },
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "label": "Customer",
+      "options": "Customer",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "pricelist",
+      "fieldtype": "Link",
+      "label": "Price List",
+      "options": "Price List"
+    },
+    {
+      "fieldname": "column_break_2",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "sub_total",
+      "fieldtype": "Currency",
+      "label": "Sub Total",
+      "read_only": 0
+    },
+    {
+      "fieldname": "items_section",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "options": "Ha Pos Invoice Item",
+      "reqd": 1
+    }
+  ],
+
+  "icon": "fa fa-cubes",
+  "idx": 1,
+  "links": [],
+  "modified": "2025-01-27 10:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Havano Restaurant Pos",
+  "name": "Ha Pos Invoice",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Stock Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "email": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Stock User"
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Purchase User",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

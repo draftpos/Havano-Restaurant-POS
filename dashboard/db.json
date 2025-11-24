@@ -1,0 +1,117 @@
+{
+  "menuCategories": [
+    { "id": 1, "name": "Appetizer" },
+    { "id": 2, "name": "Main Course" },
+    { "id": 3, "name": "Dessert" },
+    { "id": 4, "name": "Beverage" },
+    { "id": 5, "name": "Side Dish" },
+    { "id": 6, "name": "Entree" },
+    { "id": 7, "name": "Platter" },
+    { "id": 8, "name": "Soup" },
+    { "id": 9, "name": "Salad" },
+    { "id": 10, "name": "Sandwich" }
+  ],
+  "menuItems": [
+    { "id": 1, "name": "Bruschetta", "price": 5.0, "categoryId": 1 },
+    { "id": 2, "name": "Caesar Salad", "price": 7.0, "categoryId": 1 },
+    { "id": 3, "name": "Pepperoni Pizza", "price": 12.0, "categoryId": 2 },
+    { "id": 4, "name": "Grilled Chicken", "price": 15.0, "categoryId": 2 },
+    { "id": 5, "name": "Chocolate Cake", "price": 6.0, "categoryId": 3 },
+    { "id": 6, "name": "Coke", "price": 2.0, "categoryId": 4 },
+    { "id": 7, "name": "Orange Juice", "price": 3.0, "categoryId": 4 },
+    { "id": 8, "name": "Garlic Bread", "price": 4.0, "categoryId": 1 },
+    { "id": 9, "name": "Margherita Pizza", "price": 11.0, "categoryId": 2 },
+    { "id": 10, "name": "Ice Cream Sundae", "price": 5.0, "categoryId": 3 },
+    { "id": 11, "name": "Steak", "price": 18.0, "categoryId": 2 },
+    { "id": 12, "name": "Spaghetti", "price": 10.0, "categoryId": 2 },
+    { "id": 13, "name": "Burger", "price": 8.0, "categoryId": 2 },
+    { "id": 14, "name": "French Fries", "price": 3.0, "categoryId": 5 },
+    { "id": 15, "name": "Salad", "price": 6.0, "categoryId": 9 },
+    { "id": 16, "name": "Pasta", "price": 9.0, "categoryId": 2 },
+    { "id": 17, "name": "Pizza", "price": 12.0, "categoryId": 2 },
+    { "id": 18, "name": "Sushi", "price": 15.0, "categoryId": 2 },
+    { "id": 19, "name": "Tacos", "price": 8.0, "categoryId": 2 },
+    { "id": 20, "name": "Ramen", "price": 10.0, "categoryId": 2 },
+    { "id": 21, "name": "Curry", "price": 12.0, "categoryId": 2 },
+    { "id": 22, "name": "Noodles", "price": 9.0, "categoryId": 2 },
+    { "id": 23, "name": "Pancakes", "price": 7.0, "categoryId": 2 },
+    { "id": 24, "name": "Omelette", "price": 8.0, "categoryId": 2 },
+    { "id": 25, "name": "Steak", "price": 18.0, "categoryId": 2 },
+    { "id": 26, "name": "Spaghetti", "price": 10.0, "categoryId": 2 },
+    { "id": 27, "name": "Burger", "price": 8.0, "categoryId": 2 }
+  ],
+  "diningTables": [
+    { "id": 1, "tableNumber": "T1", "capacity": 4, "status": "Occupied" },
+    { "id": 2, "tableNumber": "T2", "capacity": 2, "status": "Occupied" },
+    { "id": 3, "tableNumber": "T3", "capacity": 6, "status": "Available" },
+    { "id": 4, "tableNumber": "T4", "capacity": 4, "status": "Occupied" },
+    { "id": 5, "tableNumber": "T5", "capacity": 2, "status": "Available" },
+    { "id": 6, "tableNumber": "T6", "capacity": 4, "status": "Available" },
+    { "id": 7, "tableNumber": "T7", "capacity": 2, "status": "Booked" },
+    { "id": 8, "tableNumber": "T8", "capacity": 6, "status": "Available" },
+    { "id": 9, "tableNumber": "T9", "capacity": 4, "status": "Occupied" },
+    { "id": 10, "tableNumber": "T10", "capacity": 2, "status": "Available" },
+    { "id": 11, "tableNumber": "T11", "capacity": 4, "status": "Booked" },
+    { "id": 12, "tableNumber": "T12", "capacity": 2, "status": "Occupied" }
+  ],
+  "employees": [
+    { "id": 1, "name": "Alice", "role": "Waiter" },
+    { "id": 2, "name": "Bob", "role": "Waiter" },
+    { "id": 3, "name": "Carol", "role": "Waiter" },
+    { "id": 4, "name": "David", "role": "Waiter" }
+  ],
+  "orders": [
+    {
+      "id": 1,
+      "tableId": 1,
+      "employeeId": 1,
+      "orderDateTime": "2025-09-27T19:00:00",
+      "totalAmount": 21,
+      "status": "Pending"
+    },
+    {
+      "id": 2,
+      "tableId": 2,
+      "employeeId": 4,
+      "orderDateTime": "2025-09-27T19:10:00",
+      "totalAmount": 17,
+      "status": "Served"
+    },
+    {
+      "id": 3,
+      "tableId": 4,
+      "employeeId": 1,
+      "orderDateTime": "2025-09-27T19:15:00",
+      "totalAmount": 28,
+      "status": "Pending"
+    },
+    {
+      "id": 4,
+      "tableId": 1,
+      "employeeId": 1,
+      "orderDateTime": "2025-09-27T19:45:00",
+      "totalAmount": 10,
+      "status": "Paid"
+    }
+  ],
+  "orderItems": [
+    { "id": 1, "orderId": 1, "menuItemId": 3, "quantity": 1, "price": 12 },
+    { "id": 2, "orderId": 1, "menuItemId": 6, "quantity": 1, "price": 2 },
+    { "id": 3, "orderId": 1, "menuItemId": 5, "quantity": 1, "price": 6 },
+    { "id": 4, "orderId": 2, "menuItemId": 4, "quantity": 1, "price": 15 },
+    { "id": 5, "orderId": 2, "menuItemId": 7, "quantity": 1, "price": 2 },
+    { "id": 6, "orderId": 3, "menuItemId": 9, "quantity": 2, "price": 22 },
+    { "id": 7, "orderId": 3, "menuItemId": 6, "quantity": 1, "price": 2 },
+    { "id": 8, "orderId": 3, "menuItemId": 10, "quantity": 1, "price": 4 },
+    { "id": 9, "orderId": 4, "menuItemId": 1, "quantity": 2, "price": 10 }
+  ],
+  "payments": [
+    {
+      "id": 1,
+      "orderId": 4,
+      "paymentType": "Cash",
+      "paymentDateTime": "2025-09-27T20:00:00",
+      "amount": 10
+    }
+  ]
+}

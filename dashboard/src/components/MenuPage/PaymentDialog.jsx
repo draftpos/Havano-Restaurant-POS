@@ -1,0 +1,352 @@
+import React, { useState, useEffect, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import Keyboard from "@/components/ui/Keyboard";
+import { Textarea } from "@/components/ui/textarea";
+import { createOrderAndPay, makePaymentForTransaction } from "@/lib/utils";
+import { db } from "@/lib/frappeClient";
+
+export default function PaymentDialog({
+  open,
+  onOpenChange,
+  onPaid,
+  cartItems = [],
+  customer = "",
+  orderId = null,
+  orderPayload = null,
+  isExistingTransaction = false,
+  transactionDoctype = null,
+  transactionName = null,
+}) {
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [activeMethod, setActiveMethod] = useState("");
+  const [paymentAmounts, setPaymentAmounts] = useState({});
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(true);
+  const [total, setTotal] = useState(0);
+
+  // Fetch payment methods from HA POS Setting
+  useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      setLoadingPaymentMethods(true);
+      try {
+        // First, find the active POS setting
+        const settings = await db.getDocList("HA POS Setting", {
+          fields: ["name"],
+          filters: { ha_pos_settings_on: 1 },
+          limit: 1,
+        });
+
+        if (settings && settings.length > 0) {
+          // Fetch the full document to get child table
+          const settingDoc = await db.getDoc("HA POS Setting", settings[0].name);
+          
+          // Extract payment methods from child table
+          const methods = (settingDoc.selected_payment_methods || [])
+            .map((item) => item.mode_of_payment)
+            .filter((method) => method); // Remove any null/undefined values
+
+          if (methods.length > 0) {
+            setPaymentMethods(methods);
+            setActiveMethod(methods[0]);
+            setPaymentAmounts(methods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+          } else {
+            // Fallback to default if no methods found
+            const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
+            setPaymentMethods(defaultMethods);
+            setActiveMethod(defaultMethods[0]);
+            setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+          }
+        } else {
+          // Fallback to default if no setting found
+          const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
+          setPaymentMethods(defaultMethods);
+          setActiveMethod(defaultMethods[0]);
+          setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+        }
+      } catch (error) {
+        console.error("Error fetching payment methods:", error);
+        // Fallback to default on error
+        const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
+        setPaymentMethods(defaultMethods);
+        setActiveMethod(defaultMethods[0]);
+        setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+      } finally {
+        setLoadingPaymentMethods(false);
+      }
+    };
+
+    fetchPaymentMethods();
+  }, []);
+
+  useEffect(() => {
+    const t = (cartItems || []).reduce((acc, it) => {
+      const qty = Number(it.quantity || it.qty || 1) || 0;
+      const rate = Number(it.price || it.rate || it.standard_rate || 0) || 0;
+      return acc + qty * rate;
+    }, 0);
+    setTotal(Number(t.toFixed(2)));
+    // reset payment amounts when cart changes
+    if (paymentMethods.length > 0) {
+      setPaymentAmounts(paymentMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+      setActiveMethod(paymentMethods[0]);
+    }
+  }, [cartItems, paymentMethods]);
+
+  const setPaymentAmount = (method, val) => {
+    setPaymentAmounts((s) => ({ ...s, [method]: String(val) }));
+  };
+
+  const sumPayments = () => {
+    return Object.values(paymentAmounts).reduce((acc, v) => {
+      const n = parseFloat(v) || 0;
+      return acc + n;
+    }, 0);
+  };
+
+  // Calculate payment status
+  const paymentStatus = useMemo(() => {
+    const paid = sumPayments();
+    const diff = paid - total;
+    return {
+      paid,
+      diff,
+      hasDue: diff < 0,
+      hasReturn: diff > 0,
+    };
+  }, [paymentAmounts, total]);
+
+  const handlePay = async () => {
+    setLoading(true);
+    try {
+      const paidTotal = sumPayments();
+
+      // create a small breakdown note
+      const breakdown = Object.entries(paymentAmounts)
+        .filter(([k, v]) => parseFloat(v) > 0)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(", ");
+
+      const payment_method = breakdown.split(",").length > 1 ? "Multi" : (Object.entries(paymentAmounts).find(([,v]) => parseFloat(v) > 0)?.[0] || "Cash");
+
+      const fullNote = note ? `${note} | ${breakdown}` : breakdown;
+
+      let res;
+      
+      if (isExistingTransaction && transactionDoctype && transactionName) {
+        // Make payment for existing Sales Invoice or Quotation
+        res = await makePaymentForTransaction(
+          transactionDoctype,
+          transactionName,
+          paidTotal > 0 ? paidTotal : null,
+          payment_method,
+          fullNote
+        );
+      } else {
+        // Create new order and payment (original flow)
+        const payload =
+          orderPayload ||
+          ({
+            order_type: "Take Away",
+            customer_name: customer,
+            order_items: cartItems,
+          });
+
+        res = await createOrderAndPay(
+          payload,
+          paidTotal > 0 ? paidTotal : null,
+          payment_method,
+          fullNote
+        );
+      }
+
+      if (res && res.success) {
+        if (typeof onPaid === "function") onPaid(res);
+        if (typeof onOpenChange === "function") onOpenChange(false);
+      } else {
+        console.error("Payment failed", res);
+      }
+    } catch (err) {
+      console.error("Payment error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <style>{`
+        .payment-dialog-content {
+          max-width: 80rem !important;
+          width: 95% !important;
+          max-height: 90vh !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+        @media (min-width: 768px) {
+          .payment-dialog-content {
+            width: 85% !important;
+          }
+        }
+        @media (min-width: 1024px) {
+          .payment-dialog-content {
+            width: 75% !important;
+          }
+        }
+        @media (min-width: 1280px) {
+          .payment-dialog-content {
+            width: 65% !important;
+          }
+        }
+        .payment-keyboard-box {
+          background-color: #f9fafb !important;
+          padding: 1rem !important;
+          border-radius: 0.5rem !important;
+        }
+        .payment-keyboard-container {
+          width: 100% !important;
+        }
+        @media (min-width: 640px) {
+          .payment-keyboard-container {
+            width: 32rem !important;
+            min-width: 32rem !important;
+          }
+        }
+        .payment-keyboard-box .grid button,
+        .payment-keyboard-box button[type="button"] {
+          font-size: 1.5rem !important;
+          padding-top: 1.25rem !important;
+          padding-bottom: 1.25rem !important;
+        }
+        .payment-dialog-content::-webkit-scrollbar {
+          width: 8px;
+        }
+        .payment-dialog-content::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+        .payment-dialog-content::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 4px;
+        }
+        .payment-dialog-content::-webkit-scrollbar-thumb:hover {
+          background: #555;
+        }
+      `}</style>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="p-4 rounded-xl bg-white shadow-lg w-full max-w-7xl payment-dialog-content">
+          <div className="flex flex-col h-full">
+            <DialogHeader className="mb-3 flex-shrink-0">
+              <DialogTitle className="text-lg font-semibold">Make Payment</DialogTitle>
+              <DialogDescription className="sr-only">
+                Enter payment amount and select payment method
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col sm:flex-row gap-4 flex-1 min-h-0">
+              <div className="flex-1 bg-gray-50 p-4 rounded-lg min-w-0">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium">Total</label>
+                    <div className="text-2xl font-bold">${total?.toFixed(2) || "0.00"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium">Payments</label>
+                    <div className="space-y-2 mt-2">
+                      {paymentMethods.map((m) => (
+                        <div 
+                          key={m} 
+                          className={`flex items-center gap-2 p-2 border rounded-lg transition-colors ${
+                            activeMethod === m 
+                              ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" 
+                              : "border-gray-300 bg-white hover:border-gray-400"
+                          }`}
+                        >
+                          <div className={`w-28 font-medium ${
+                            activeMethod === m ? "text-blue-700" : "text-gray-700"
+                          }`}>
+                            {m}
+                          </div>
+                          <input
+                            inputMode="decimal"
+                            className={`flex-1 p-2 border rounded ${
+                              activeMethod === m 
+                                ? "border-blue-400 bg-white ring-1 ring-blue-300 focus:ring-2 focus:ring-blue-400" 
+                                : "border-gray-300 focus:border-gray-400 focus:ring-1 focus:ring-gray-300"
+                            }`}
+                            value={paymentAmounts[m]}
+                            onFocus={() => setActiveMethod(m)}
+                            onChange={(e) => setPaymentAmount(m, e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium">Change</label>
+                    <div className={`text-xl font-bold ${
+                      paymentStatus.hasDue ? "text-red-600" : paymentStatus.hasReturn ? "text-green-600" : ""
+                    }`}>
+                      {paymentStatus.diff >= 0 
+                        ? `Return ${paymentStatus.diff.toFixed(2)}` 
+                        : `Due -${Math.abs(paymentStatus.diff).toFixed(2)}`}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => onOpenChange && onOpenChange(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handlePay} 
+                      disabled={loading || paymentStatus.hasDue} 
+                      className="flex-1"
+                    >
+                      {loading ? "Processing..." : "Make Payment"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-full sm:w-[32rem] payment-keyboard-container flex-shrink-0">
+                <div className="bg-gray-50 p-4 rounded-lg payment-keyboard-box">
+                  <Keyboard
+                    value={paymentAmounts[activeMethod]}
+                    setValue={(v) => setPaymentAmount(activeMethod, v)}
+                    className="w-full"
+                    buttonClass="text-2xl py-5"
+                  />
+
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium">Note</label>
+                    <Textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="Optional note"
+                      rows={3}
+                      className="w-full mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

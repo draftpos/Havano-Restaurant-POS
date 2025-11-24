@@ -1,0 +1,373 @@
+import { Edit, ShoppingCart, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast,Toaster } from "sonner";
+
+import { formatCurrency, handleCreateOrder, handleUpdateOrder, createTransaction, getDefaultCustomer, convertQuotationToSalesInvoiceFromCart } from "@/lib/utils";
+import { useCartStore } from "@/stores/useCartStore";
+import { useOrderStore } from "@/stores/useOrderStore";
+
+import Clock from "../HomePage/Clock";
+import { Button } from "../ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import UpdateCartDialog from "./UpdateCartDialog";
+import PaymentDialog from "./PaymentDialog";
+
+const Cart = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const fetchOrders = useOrderStore((state) => state.fetchOrders);
+  const fetchTableOrders = useOrderStore((state) => state.fetchTableOrders);
+  const {
+    cart,
+    removeFromCart,
+    openUpdateDialog,
+    activeOrderId,
+    activeTableId,
+    activeWaiterId,
+    customerName,
+    orderType,
+    transactionType,
+    customer,
+    activeQuotationId,
+    clearCart,
+  } = useCartStore();
+
+
+  const handleSubmitOrder = async (cart) => {
+    console.log("🔵 handleSubmitOrder called");
+    console.log("  orderType:", orderType);
+    console.log("  transactionType:", transactionType);
+    console.log("  activeOrderId:", activeOrderId);
+    console.log("  cart.length:", cart?.length);
+
+    if (!cart || cart.length === 0) {
+      console.log("  ❌ Cart is empty, returning");
+      return;
+    }
+
+    // If transactionType is Quotation, handle quotation update and conversion
+    if (transactionType === "Quotation") {
+      if (!customer) {
+        toast.error("Customer required", {
+          description: "Please select a customer before creating a quotation.",
+          duration: 5000,
+        });
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        // Convert cart items to the format expected by API
+        const items = cart.map((item) => ({
+          item_code: item.name || item.item_name,
+          qty: item.quantity || 1,
+          rate: item.price || item.standard_rate || 0,
+        }));
+
+        // If activeQuotationId exists, update quotation and convert to sales invoice
+        if (activeQuotationId) {
+          const result = await convertQuotationToSalesInvoiceFromCart(
+            activeQuotationId,
+            items,
+            customer,
+            orderType || "Take Away",
+            activeTableId || null,
+            activeWaiterId || null,
+            customerName || customer
+          );
+          
+          if (result && result.success !== false && result.sales_invoice) {
+            // Sales Invoice created, open payment dialog
+            setPaymentState({
+              open: true,
+              orderId: null,
+              items: cart,
+              payload: null,
+              isExistingTransaction: true,
+              transactionDoctype: "Sales Invoice",
+              transactionName: result.sales_invoice,
+            });
+          } else {
+            // Log the full result for debugging
+            console.error("Convert quotation failed:", result);
+            
+            // Build a comprehensive error message
+            let errorMessage = result?.message || "Failed to convert quotation";
+            if (result?.details) {
+              errorMessage += `: ${result.details}`;
+            }
+            if (result?.error_type) {
+              errorMessage += ` (${result.error_type})`;
+            }
+            
+            toast.error("Failed to convert quotation", {
+              description: errorMessage,
+              duration: 8000, // Longer duration to read the error
+            });
+          }
+        } else {
+          // Create new quotation
+          const result = await createTransaction("Quotation", customer, items);
+          
+          if (result && result.success !== false && result.name) {
+            toast.success("Quotation created successfully", {
+              description: `Quotation ID: ${result.name}`,
+              duration: 4000,
+            });
+            
+            clearCart();
+            
+            // Refresh orders if needed
+            try {
+              await fetchOrders();
+              if (activeTableId) {
+                await fetchTableOrders(activeTableId);
+              }
+            } catch (refreshErr) {
+              console.error("Failed to refresh orders:", refreshErr);
+            }
+          } else {
+            toast.error("Failed to create quotation", {
+              description: result?.message || result?.details || "Please try again later.",
+              duration: 5000,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Quotation error:", err);
+        toast.error("Failed to process quotation", {
+          description: err?.message || "Please try again later.",
+          duration: 5000,
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // For Sales Invoice, create Sales Invoice first, then open payment dialog
+    setIsSubmitting(true);
+    try {
+      // Get customer - use selected customer or default from settings
+      let selectedCustomer = customer;
+      if (!selectedCustomer) {
+        selectedCustomer = await getDefaultCustomer();
+        if (!selectedCustomer) {
+          toast.error("Customer required", {
+            description: "Please select a customer or configure a default customer in Settings.",
+            duration: 5000,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Convert cart items to the format expected by createTransaction
+      const items = cart.map((item) => ({
+        item_code: item.name || item.item_name,
+        qty: item.quantity || 1,
+        rate: item.price || item.standard_rate || 0,
+      }));
+
+      // Create Sales Invoice first (this will also create HA Order)
+      const invoiceResult = await createTransaction(
+        "Sales Invoice", 
+        selectedCustomer, 
+        items,
+        null, // company
+        orderType || "Take Away", // order_type
+        activeTableId || null, // table
+        activeWaiterId || null, // waiter
+        customerName || selectedCustomer // customer_name
+      );
+      
+      if (invoiceResult && invoiceResult.success !== false && invoiceResult.name) {
+        // Sales Invoice created successfully, now open payment dialog
+        setPaymentState({
+          open: true,
+          orderId: null,
+          items: cart,
+          payload: null,
+          isExistingTransaction: true,
+          transactionDoctype: "Sales Invoice",
+          transactionName: invoiceResult.name,
+        });
+      } else {
+        toast.error("Failed to create sales invoice", {
+          description: invoiceResult?.message || invoiceResult?.details || "Please try again later.",
+          duration: 5000,
+        });
+      }
+    } catch (err) {
+      console.error("Sales Invoice creation error:", err);
+      toast.error("Failed to create sales invoice", {
+        description: err?.message || "Please try again later.",
+        duration: 5000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const [paymentState, setPaymentState] = useState({ 
+    open: false, 
+    orderId: null, 
+    items: [], 
+    payload: null,
+    isExistingTransaction: false,
+    transactionDoctype: null,
+    transactionName: null,
+  });
+
+  const handlePaymentPaid = async (invoiceResp) => {
+    // After payment / invoice created, clear cart and refresh orders
+    try {
+      clearCart();
+      // Refresh orders list
+      try {
+        await fetchOrders();
+        if (activeTableId) {
+          await fetchTableOrders(activeTableId);
+        }
+      } catch (err) {
+        console.error("Failed to refresh orders:", err);
+      }
+      // Navigate if Dine In, otherwise stay on current page
+      if (activeTableId) {
+        navigate(`/tables/${activeTableId}`);
+      }
+    } finally {
+      setPaymentState({ 
+        open: false, 
+        orderId: null, 
+        items: [], 
+        payload: null,
+        isExistingTransaction: false,
+        transactionDoctype: null,
+        transactionName: null,
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card className="h-[90vh] flex flex-col">
+        <CardHeader>
+          <CardTitle className="flex justify-between items-center">
+            <Clock />
+            {activeOrderId ? (
+              <h1 className="text-2xl font-bold text-primary">
+                {activeOrderId}
+              </h1>
+            ) : (
+              <h1 className="text-2xl font-bold text-primary">New Order</h1>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <hr className="border border-gray-600" />
+        <CardContent className="flex-1 overflow-y-auto">
+          <div className="flex justify-between items-center my-2">
+            <p className="text-lg font-bold">Order Details</p>
+            {cart.length > 0 && (
+              <p className="text-lg font-bold text-primary">
+                Total: {formatCurrency(
+                  cart.reduce((total, item) => {
+                    const price = item.price ?? item.standard_rate ?? 0;
+                    const quantity = item.quantity ?? 1;
+                    return total + (price * quantity);
+                  }, 0)
+                )}
+              </p>
+            )}
+          </div>
+          {cart.length > 0 ? (
+            <div className="flex flex-col space-y-1">
+              {cart.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex justify-between items-center bg-secondary-background py-2 px-4 rounded-sm"
+                >
+                  <div className="flex gap-4 font-bold">
+                    <p>x{item.quantity}</p>
+                    <p>{item.item_name || item.name}</p>
+                    <i>
+                      {formatCurrency(item.price ?? item.standard_rate ?? 0)}
+                    </i>
+                  </div>
+                  <div className="flex items-center">
+                    <div
+                      className="cursor-pointer hover:bg-background p-2 rounded-sm group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromCart(item);
+                      }}
+                    >
+                      <Trash2
+                        size={20}
+                        className="text-red-700 group-hover:text-red-400"
+                      />
+                    </div>
+                    <div
+                      className="cursor-pointer hover:bg-background p-2 rounded-sm group"
+                      onClick={() => openUpdateDialog(item)}
+                    >
+                      <Edit
+                        size={20}
+                        className="text-yellow-700 group-hover:text-yellow-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <div className="flex flex-col justify-center items-center gap-2">
+                <ShoppingCart size={60} className="text-secondary" />
+                <i>Cart is empty</i>
+              </div>
+            </div>
+          )}
+        </CardContent>
+        <hr className="border border-gray-600" />
+        <CardFooter>
+          <Button
+            onClick={() => handleSubmitOrder(cart)}
+            size="lg"
+            className="w-full"
+            disabled={cart.length === 0 || isSubmitting}
+            title={cart.length === 0 ? "Add items to your cart first" : ""}
+          >
+            {transactionType === "Quotation" 
+              ? (activeQuotationId ? "Convert to Sales Invoice" : "Create Quotation")
+              : (activeOrderId ? "Update Order" : "Place Order")
+            }
+          </Button>
+        </CardFooter>
+      </Card>
+      <Toaster richColors duration={4000} position="top-center" />
+      <UpdateCartDialog />
+      <PaymentDialog
+        open={paymentState.open}
+        onOpenChange={(open) => setPaymentState((s) => ({ ...s, open }))}
+        cartItems={paymentState.items}
+        customer={customerName}
+        orderId={paymentState.orderId}
+        orderPayload={paymentState.payload}
+        isExistingTransaction={paymentState.isExistingTransaction}
+        transactionDoctype={paymentState.transactionDoctype}
+        transactionName={paymentState.transactionName}
+        onPaid={handlePaymentPaid}
+      />
+    </>
+  );
+};
+
+export default Cart;

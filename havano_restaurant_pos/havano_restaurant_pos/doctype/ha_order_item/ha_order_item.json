@@ -1,0 +1,79 @@
+{
+  "actions": [],
+  "creation": "2025-10-05 23:06:32.615805",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "menu_item",
+    "menu_item_name",
+    "preparation_remark",
+    "column_break_jmwk",
+    "qty",
+    "rate",
+    "amount"
+  ],
+  "fields": [
+    {
+      "fieldname": "menu_item",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Menu Item",
+      "options": "Item",
+      "reqd": 1
+    },
+    {
+      "fetch_from": "menu_item.item_name",
+      "fieldname": "menu_item_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Menu Item Name",
+      "read_only": 1
+    },
+    {
+      "fieldname": "qty",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Quantity",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "amount",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Amount",
+      "read_only": 1
+    },
+    {
+      "fetch_from": "menu_item.standard_rate",
+      "fetch_if_empty": 1,
+      "fieldname": "rate",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Rate"
+    },
+    {
+      "fieldname": "preparation_remark",
+      "fieldtype": "Small Text",
+      "label": "Preparation Remark"
+    },
+    {
+      "fieldname": "column_break_jmwk",
+      "fieldtype": "Column Break"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "istable": 1,
+  "links": [],
+  "modified": "2025-10-12 10:04:15.038113",
+  "modified_by": "Administrator",
+  "module": "Havano Restaurant Pos",
+  "name": "HA Order Item",
+  "owner": "Administrator",
+  "permissions": [],
+  "row_format": "Dynamic",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

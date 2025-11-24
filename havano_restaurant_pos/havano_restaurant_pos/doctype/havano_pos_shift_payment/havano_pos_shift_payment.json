@@ -1,0 +1,43 @@
+{
+  "doctype": "DocType",
+  "name": "Havano POS Shift Payment",
+  "module": "Havano Restaurant Pos",
+  "istable": 1,
+  "fields": [
+    {
+      "fieldname": "payment_method",
+      "label": "Payment Method",
+      "fieldtype": "Link",
+      "options": "Mode of Payment",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_preview": 1
+    },
+    {
+      "fieldname": "amount",
+      "label": "Amount",
+      "fieldtype": "Currency",
+      "reqd": 1,
+      "in_list_view": 1,
+      "in_preview": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "permlevel": 0,
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}
