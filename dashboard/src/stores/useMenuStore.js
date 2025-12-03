@@ -15,9 +15,15 @@ export const useMenuStore = create((set) => ({
     try {
       const menuItemGroup = await getSamplePosMenuItemGroup();
       const data = await db.getDocList("Item", {
-        fields: ["name", "standard_rate", "item_name", "custom_menu_category"],
-        filters: menuItemGroup ? [["item_group", "=", menuItemGroup]] : [],
-      });
+			fields: ["name", "standard_rate", "item_name", "custom_menu_category"],
+			filters: menuItemGroup
+				? [
+						["item_group", "=", menuItemGroup],
+						["disabled", "=", 0],
+				  ]
+				: [],
+			limit: 0,
+		});
       set({ menuItems: data, loading: false });
     } catch (err) {
       console.error("Fetch error:", err);

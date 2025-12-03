@@ -1,7 +1,7 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge"
 
-import { auth,call, db } from "./frappeClient";
+import { auth, call, db } from "./frappeClient";
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));

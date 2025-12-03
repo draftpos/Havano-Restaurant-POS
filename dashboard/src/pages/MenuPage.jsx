@@ -20,10 +20,13 @@ const MenuPage = () => {
 
   return (
     <Container>
-      <div className="grid grid-cols-7 gap-4 relative z-0">
-        <div className="col-span-5">
+      <div className="grid grid-cols-9 gap-4 relative z-0">
+        <div className="col-span-1 border-r pr-4">
+          <MenuCategories />
+        </div>
+        <div className="col-span-6">
           <div className="flex items-center gap-4">
-            <MenuCategories />
+            {/* <MenuCategories /> */}
             <div className="flex items-center gap-2">
               <label className="cursor-not-allowed opacity-50">
                 <input
