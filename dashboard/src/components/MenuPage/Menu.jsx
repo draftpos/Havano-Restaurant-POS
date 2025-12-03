@@ -45,7 +45,7 @@ const Menu = () => {
     selectedCategoryId
   );
 
-  const { currentIndex, setCurrentIndex } = useMenuNavigation({
+  const { currentIndex, setCurrentIndex, target } = useMenuNavigation({
     NUMBER_OF_COLUMNS: 5,
     items: filteredItems,
   });
@@ -117,6 +117,7 @@ const Menu = () => {
             key={item.name} 
             item={item} 
             index={index}
+            target={target}
             currentIndex={currentIndex} 
             setCurrentIndex={setCurrentIndex} />
         ))}

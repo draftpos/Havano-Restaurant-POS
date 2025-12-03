@@ -4,8 +4,9 @@ import { useCartStore } from "@/stores/useCartStore";
 
 import { Card, CardHeader, CardTitle } from "../ui/card";
 
-const MenuItemCard = ({ item, index , currentIndex, setCurrentIndex }) => {
+const MenuItemCard = ({ item, index , currentIndex, setCurrentIndex, target }) => {
   const addToCart = useCartStore((state) => state.addToCart);
+  const isActive = currentIndex === index && target === "menu";
 
   const handleAddToCart = () => {
     addToCart({
@@ -32,7 +33,7 @@ const MenuItemCard = ({ item, index , currentIndex, setCurrentIndex }) => {
         }}
         className={
           cn(
-            "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50", currentIndex  === index && "border-primary bg-primary/10"
+            "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50", isActive && "border-primary bg-primary/10"
           )
         }
       >
