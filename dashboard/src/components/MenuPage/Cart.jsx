@@ -412,7 +412,7 @@ import { Edit, ShoppingCart, Trash2 } from "lucide-react";
 import { Toaster } from "sonner";
 import { useNavigate } from "react-router-dom";
 
-import { formatCurrency,calculateCartTotal } from "@/lib/utils";
+import { formatCurrency, calculateCartTotal, cn} from "@/lib/utils";
 
 import { useMenuContext } from "@/contexts/MenuContext";
 
@@ -442,7 +442,10 @@ const Cart = () => {
     isSubmitting,
     paymentState,
     setPaymentState,
+    target,
+    currentIndex
   } = useMenuContext();
+
 
   const navigate = useNavigate();
 
@@ -468,31 +471,38 @@ const Cart = () => {
 
           {cart.length ? (
             <div className="space-y-1">
-              {cart.map((item) => (
-                <div
-                  key={item.name}
-                  className="flex justify-between bg-secondary-background p-2 rounded"
-                >
-                  <div className="flex gap-4 font-bold">
-                    <p>x{item.quantity}</p>
-                    <p>{item.item_name || item.name}</p>
-                    <i>
-                      {formatCurrency(item.price ?? item.standard_rate ?? 0)}
-                    </i>
-                  </div>
+              {cart.map((item, index) => {
+                const isActive = currentIndex === index && target === "cart";
 
-                  <div className="flex">
-                    <Trash2
-                      onClick={() => removeFromCart(item)}
-                      className="cursor-pointer text-red-600"
-                    />
-                    <Edit
-                      onClick={() => openUpdateDialog(item)}
-                      className="cursor-pointer text-yellow-600 ml-2"
-                    />
+                return (
+                  <div
+                    key={item.name}
+                    className={cn(
+                      "flex justify-between bg-secondary-background p-2 rounded",
+                      isActive && "border-2 border-primary bg-primary/10"
+                    )}
+                  >
+                    <div className="flex gap-4 font-bold">
+                      <p>x{item.quantity}</p>
+                      <p>{item.item_name || item.name}</p>
+                      <i>
+                        {formatCurrency(item.price ?? item.standard_rate ?? 0)}
+                      </i>
+                    </div>
+
+                    <div className="flex">
+                      <Trash2
+                        onClick={() => removeFromCart(item)}
+                        className="cursor-pointer text-red-600"
+                      />
+                      <Edit
+                        onClick={() => openUpdateDialog(item)}
+                        className="cursor-pointer text-yellow-600 ml-2"
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center gap-2">

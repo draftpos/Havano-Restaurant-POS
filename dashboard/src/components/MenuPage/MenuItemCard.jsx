@@ -11,8 +11,9 @@ const MenuItemCard = ({ item, index }) => {
     currentIndex,
     setCurrentIndex,
     target,
+    setTarget
   } = useMenuContext();
-  
+
   const addToCart = useCartStore((state) => state.addToCart);
   const isActive = currentIndex === index && target === "menu";
 
@@ -30,6 +31,7 @@ const MenuItemCard = ({ item, index }) => {
 
   const handleSelectItem = () => {
     setCurrentIndex(index);
+    setTarget("menu");
   }
   return (
     <>

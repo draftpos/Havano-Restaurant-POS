@@ -106,6 +106,9 @@ export function MenuProvider({ children }) {
     NUMBER_OF_COLUMNS: 5,
     items: filteredItems,
     target,
+    setTarget,
+    visibleCategories,
+    handleSubmitOrder
   });
 
   return (
