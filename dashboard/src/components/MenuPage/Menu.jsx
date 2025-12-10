@@ -19,6 +19,7 @@ import NumPad from "./UpdateCartDialog";
 import { Button } from "../ui/button";
 
 import { CreateProductBundleDialog } from "../ui/CreateProductBundleDialog";
+import { set } from "date-fns";
 
 const Menu = () => {
   const {
@@ -37,7 +38,8 @@ const Menu = () => {
     filteredItems,
     addToCart,
     selectedAgent,
-    setSelectedAgent
+    setSelectedAgent,
+    setTarget,
   } = useMenuContext();
 
   const {
@@ -66,6 +68,14 @@ const Menu = () => {
       window.removeEventListener("keydown", handleF1Click);
     }
   })
+
+  useEffect(() => {
+    if (openMixDialog){
+      setTarget("");
+    }else{
+      setTarget("menu");
+    }
+  }, [openMixDialog])
 
   
   return (

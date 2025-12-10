@@ -1,12 +1,22 @@
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import Container from "@/components/Shared/Container";
-import navLinks from "@/navLinks";
+import getNavLinks from "@/navLinks";
 import { useCartStore } from "@/stores/useCartStore";
 
 const Footer = () => {
+  const [navLinks, setNavLinks] = useState([]);
   const { startNewTakeAwayOrder } = useCartStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchLinks = async () => {
+      const links = await getNavLinks();
+      setNavLinks(links);
+    };
+    fetchLinks();
+  }, []);
 
   const handleNavClick = (e, link) => {
     if (link.path === "/menu") {
@@ -24,7 +34,6 @@ const Footer = () => {
           <div className="flex items-center justify-between">
             {navLinks.map((link) => {
               if (!link.active) {
-                // Render disabled/non-active links
                 return (
                   <span
                     key={link.name}
@@ -34,8 +43,7 @@ const Footer = () => {
                   </span>
                 );
               }
-              
-              // Render active links
+
               return (
                 <NavLink
                   to={link.path}

@@ -16,14 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Trash2, ChevronsUpDown } from "lucide-react";
 
-const OPTIONS = [
-  { id: "opt1", label: "Product A" },
-  { id: "opt2", label: "Product B" },
-  { id: "opt3", label: "Product C" },
-  { id: "opt4", label: "Product D" },
-  { id: "opt5", label: "Service X" },
-];
-
 function SearchableSelect({ value, onChange, options }) {
   const [open, setOpen] = useState(false);
 
@@ -54,7 +46,7 @@ function SearchableSelect({ value, onChange, options }) {
               {options.map((option) => (
                 <CommandItem
                   key={option.id}
-                  value={option.label}
+                  value={option.id}
                   onSelect={() => {
                     onChange(option.id);
                     setOpen(false);
@@ -71,41 +63,37 @@ function SearchableSelect({ value, onChange, options }) {
   );
 }
 
-function SelectableQuantityTable() {
-  const [rows, setRows] = useState([
-    { id: "1", selectedOption: "opt1", quantity: 0 },
-    { id: "2", selectedOption: "opt2", quantity: 0 },
-  ]);
-
+function SelectableQuantityTable({ value: rows, onChange, options }) {
   const addRow = () => {
-    const newId = String(Math.max(...rows.map((r) => parseInt(r.id))) + 1);
-    setRows([...rows, { id: newId, selectedOption: "", quantity: 0 }]);
+    const newId =
+      rows.length > 0
+        ? String(Math.max(...rows.map((r) => parseInt(r.id, 10))) + 1)
+        : "1";
+    onChange([...rows, { id: newId, selectedOption: "", quantity: 0 }]);
   };
 
   const deleteRow = (id) => {
-    setRows(rows.filter((row) => row.id !== id));
+    onChange(rows.filter((row) => row.id !== id));
   };
 
   const updateOption = (id, option) => {
-    setRows(
+    onChange(
       rows.map((row) =>
         row.id === id ? { ...row, selectedOption: option } : row
       )
     );
   };
 
-  const updateQuantity = (id, value) => {
-    setRows(
-      rows.map((row) => (row.id === id ? { ...row, quantity: value } : row))
-    );
+  const updateQuantity = (id, quantity) => {
+    onChange(rows.map((row) => (row.id === id ? { ...row, quantity } : row)));
   };
 
   // Helper: get options not already selected by other rows
   const getAvailableOptions = (currentId) => {
     const selectedIds = rows
-      .filter((r) => r.id !== currentId)
+      .filter((r) => r.id !== currentId && r.selectedOption)
       .map((r) => r.selectedOption);
-    return OPTIONS.filter((opt) => !selectedIds.includes(opt.id));
+    return options.filter((opt) => !selectedIds.includes(opt.id));
   };
 
   return (
@@ -154,6 +142,7 @@ function SelectableQuantityTable() {
                     onClick={() => deleteRow(row.id)}
                     className="text-destructive hover:text-destructive/80 transition-colors p-2"
                     aria-label="Delete row"
+                    type="button"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -164,7 +153,7 @@ function SelectableQuantityTable() {
         </table>
       </div>
       <div className="px-6 py-4 border-t border-border">
-        <Button onClick={addRow} className="w-full">
+        <Button onClick={addRow} className="w-full" type="button">
           Add Row
         </Button>
       </div>

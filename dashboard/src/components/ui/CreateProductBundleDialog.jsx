@@ -15,12 +15,15 @@ import { Label } from "./label";
 import { useCreateProductBundle } from "@/hooks";
 import { useMenuStore } from "@/stores/useMenuStore";
 import { toast } from "sonner";
-import { MultiSelectWithQuantity } from "./MultiSelectWithQuantity";
 import SelectableQuantityTable from "@/components/MenuPage/SelectTable";
 
-export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
+export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [tableRows, setTableRows] = useState([
+    { id: "1", selectedOption: "", quantity: 0 },
+  ]);
+
   const {
     register,
     handleSubmit,
@@ -35,7 +38,7 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
     },
   });
 
-  const  { menuItems, fetchMenuItems } = useMenuStore();
+  const { menuItems, fetchMenuItems } = useMenuStore();
 
   const {
     createBundle,
@@ -44,18 +47,16 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
   } = useCreateProductBundle();
 
   const productOptions = menuItems.map((item) => ({
-    value: item.name,
+    id: item.name, // Changed from value to id to match SelectableQuantityTable
     label: item.item_name,
     price: item.standard_rate ?? item.price ?? 0,
   }));
-
 
   const handlePriceChange = (items) => {
     const itemsArray = Object.entries(items);
 
     const total = itemsArray.reduce((acc, [key, value]) => {
-      const price =
-        productOptions.find((item) => item.value === key)?.price || 0;
+      const price = productOptions.find((item) => item.id === key)?.price || 0;
 
       const numericQty = Number(String(value).replace(",", "."));
       const numericPrice = Number(price);
@@ -66,26 +67,45 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
     setTotalPrice(Number(total.toFixed(2)));
   };
 
+  const handleTableChange = (rows) => {
+    setTableRows(rows);
+    const items = rows.reduce((acc, row) => {
+      if (row.selectedOption && row.quantity > 0) {
+        acc[row.selectedOption] = row.quantity;
+      }
+      return acc;
+    }, {});
 
-  const [selectedProducts, setSelectedProducts] = useState({});
+    handlePriceChange(items);
+    setValue("bundle_items", items, { shouldValidate: true });
+  };
+
+  React.useEffect(() => {
+    setValue("price", totalPrice, { shouldValidate: true });
+  }, [totalPrice, setValue]);
 
   const onSubmit = async (data) => {
-    const items = data.bundle_items
+    const items = tableRows.reduce((acc, row) => {
+      if (row.selectedOption && row.quantity > 0) {
+        acc[row.selectedOption] = row.quantity;
+      }
+      return acc;
+    }, {});
     setLoading(true);
     try {
       const result = await createBundle(data.new_item, data.price, items);
-      
+
       if (result && result.success) {
         if (onCreated) {
           onCreated(result.item);
         }
         reset();
-        setSelectedProducts({});
+        setTableRows([{ id: "1", selectedOption: "", quantity: 0 }]);
         setTotalPrice(0);
         onOpenChange(false);
         toast.success("Item created successfully", {
           duration: 5000,
-        })
+        });
       } else {
         toast.error("Failed to create item", {
           description: result?.message || "Please try again",
@@ -103,17 +123,18 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
     }
   };
 
-
   const handleOpenChange = (isOpen) => {
     if (!isOpen) {
       reset();
+      setTableRows([{ id: "1", selectedOption: "", quantity: 0 }]);
+      setTotalPrice(0);
     }
     onOpenChange(isOpen);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create New Item</DialogTitle>
           <DialogDescription>
@@ -157,28 +178,13 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="mobile_no">Bundle Items</Label>
-              <MultiSelectWithQuantity
+              <Label>Bundle Items</Label>
+              <SelectableQuantityTable
                 options={productOptions}
-                selectedItems={selectedProducts}
-                onChange={(items) => {
-                  if (items && Object.keys(items).length > 0) {
-                    handlePriceChange(items);
-                    setValue("price", totalPrice, { shouldValidate: true });
-                  } else {
-                    setTotalPrice(0);
-                    setValue("price", 0);
-                  }
-
-                  setSelectedProducts(items);
-                  setValue("bundle_items", items, { shouldValidate: true });
-                }}
-                placeholder="Select items"
-                searchPlaceholder="Search items..."
-                dropdownWidth="max-w-[500px]"
+                value={tableRows}
+                onChange={handleTableChange}
               />
             </div>
-            <SelectableQuantityTable/>
           </div>
           <DialogFooter>
             <Button
@@ -198,4 +204,3 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated}) {
     </Dialog>
   );
 }
-
