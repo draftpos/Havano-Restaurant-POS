@@ -574,14 +574,31 @@ export async function getCustomers() {
  * @param {string} customerName - Customer name (required)
  * @param {string} mobileNo - Mobile number (optional)
  */
-export async function createCustomer(customerName, mobileNo = null, sex, breed, species, date_of_birth, address, patient_name, complaint, physical_exam, differential_diagnosis, diagnosis, treatment, advice, history,follow_up,email) {
+export async function createCustomer(
+  customer_name, 
+  mobile_no = null,
+  sex, 
+  breed,
+  species,
+  date_of_birth,
+  address,
+  patient_name,
+  complaint,
+  physical_exam,
+  differential_diagnosis,
+  diagnosis,
+  treatment,
+  advice,
+  history,
+  follow_up,
+  email) {
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
         "havano_restaurant_pos.api.create_customer",
         {
-          customer_name: customerName,
-          mobile_no: mobileNo,
+          customer_name: customer_name,
+          mobile_no: mobile_no,
           sex: sex,
           breed: breed,
           species: species,
