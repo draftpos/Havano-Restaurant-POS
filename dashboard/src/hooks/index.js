@@ -2,6 +2,8 @@ export {default as useSortedCategories} from './useSortedCategories';
 export {default as useCategoryColors} from './useCategoryColors';
 export {default as useCategoryCounts} from './useCategoryCounts';
 export {default as useCustomers} from './useCustomers';
+export {default as useSpecies} from './useSpecies';
+export {default as useBreeds} from './useBreeds';
 export {default as useMenuNavigation} from './useMenuNavigation';
 export {default as useFilteredMenuItems} from './useFilteredMenuItems';
 export {default as useTransactionTypes} from './useTransactionTypes';

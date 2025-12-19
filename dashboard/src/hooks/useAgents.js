@@ -16,7 +16,9 @@ const useAgents = () => {
 			setFetchAgentsError(null);
 
 			const res = await getAgents();
-			setAgents(res.message || []);
+			// `getAgents()` returns the message payload directly (not an envelope),
+			// so guard for both shapes for compatibility with compiled/public code.
+			setAgents((res && (res.message || res)) || []);
 		} catch (err) {
 			console.error("Failed to fetch agents:", err);
 			setFetchAgentsError(err);

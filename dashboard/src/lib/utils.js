@@ -87,6 +87,20 @@ export async function getCurrentUserFullName() {
     return null;
   }
 }
+export async function getCurrentUser() {
+  try {
+    const userId = await auth.getLoggedInUser();
+    if (!userId || userId === "Guest") {
+      return null;
+    }
+
+    const userDoc = await db.getDoc("User", userId);
+    return userDoc;
+  } catch (err) {
+    console.error("Error getting current user info:", err);
+    return null;
+  }
+}
 
 export function formatCurrency(amount) {
   return new Intl.NumberFormat("en-US", {
@@ -569,20 +583,45 @@ export async function getCustomers() {
   }
 }
 
+export async function getSpecies() {
+  try {
+    const results = await db.getDocList("Species",
+  {
+    fields: ["species"],
+    limit_page_length: 0
+  });
+    return results || [];
+  } catch (err) {
+    console.error("Error fetching species:", err);
+    return [];
+  }
+}
+
+export async function getBreeds() {
+  try {
+    const results = await db.getDocList("Pet Breed", {
+      fields: ["pet_breed"],
+      limit_page_length: 0,
+    });
+    return results || [];
+  } catch (err) {
+    console.error("Error fetching breeds:", err);
+    return [];
+  }
+}
+
 /**
  * Create a new customer.
  * @param {string} customerName - Customer name (required)
  * @param {string} mobileNo - Mobile number (optional)
  */
-export async function createCustomer(customerName, mobileNo = null) {
+export async function createCustomer(payload = {}) {
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
         "havano_restaurant_pos.api.create_customer",
-        {
-          customer_name: customerName,
-          mobile_no: mobileNo,
-        }
+        {"customer_name": payload.customer_name,"pets": payload.pets
+}
       );
       return message;
     },

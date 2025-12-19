@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getCustomers } from "@/lib/utils";
+import { getCustomers} from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function useCustomers() {
@@ -28,3 +28,6 @@ export default function useCustomers() {
 
 	return { customers, loading, fetchCustomers };
 }
+
+
+
