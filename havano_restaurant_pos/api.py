@@ -3,6 +3,17 @@ from frappe import _
 from frappe.utils import flt
 from datetime import datetime
 
+@frappe.whitelist()
+def print_in_todo(data):
+    """Helper function to print data to ToDo for debugging"""
+    try:
+        todo = frappe.new_doc("ToDo")
+        todo.description = _("Debug: {0}").format(frappe.as_json(data))
+        todo.date = datetime.now()
+        todo.insert(ignore_permissions=True)
+    except Exception:
+        pass
+
 
 @frappe.whitelist()
 def get_customers():
@@ -1943,9 +1954,17 @@ def get_item_preparation_remarks(item):
 
 @frappe.whitelist()
 def make_multi_currency_payment(customer, payments):
+    settings = frappe.get_single("HA POS Settings")
+
+    company = None
+    for row in settings.user_mapping:
+        if row.user == frappe.session.user:
+            company = row.company
+            break
+
     if not customer:
         customer = get_default_customer()
-        
+
     system_currency = frappe.get_single_value("System Settings", "currency")
     currency_exchange = frappe.get_all(
         "Currency Exchange", fields=["from_currency", "to_currency", "exchange_rate"],
@@ -1966,6 +1985,7 @@ def make_multi_currency_payment(customer, payments):
                     "account_type": "Cash",
                     "is_group": 0,
                     "disabled": 0,
+                    "company": company,
                 },
                 "name",
             )
@@ -2008,7 +2028,6 @@ def make_multi_currency_payment(customer, payments):
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Make Multi Currency Payment Failed")
         frappe.db.rollback()
-
 
         return {
             "success": False,
