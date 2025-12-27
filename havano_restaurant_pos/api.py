@@ -1972,14 +1972,6 @@ def make_multi_currency_payment(customer, payments):
 
             if account is None:
                 unavailable_accounts.append(currency)
-                frappe.get_doc(
-                    {
-                        "doctype": "ToDo",
-                        "description": f"Set up cash account for currency: {currency}",
-                        "allocated_to": "Administrator",
-                        "status": "Open",
-                    }
-                ).insert(ignore_permissions=True)
             else:
                 accounts[currency] = account
 

@@ -192,12 +192,12 @@ const Menu = () => {
               className="w-[200px] focus:outline-none focus:ring-0 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onBlur={() => {
-                // Refocus immediately when input loses focus
-                setTimeout(() => {
-                  searchInputRef.current?.focus();
-                }, 0);
-              }}
+              // onBlur={() => {
+              //   // Refocus immediately when input loses focus
+              //   setTimeout(() => {
+              //     searchInputRef.current?.focus();
+              //   }, 0);
+              // }}
             />
             {searchTerm.length > 0 ? (
               <X
