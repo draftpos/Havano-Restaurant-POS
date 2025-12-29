@@ -1,6 +1,6 @@
 import { useMenuContext } from "@/contexts/MenuContext";
 import { cn } from "@/lib/utils";
-import { use, useEffect } from "react";
+import { useEffect } from "react";
 
 const MenuCategories = () => {
   const {
