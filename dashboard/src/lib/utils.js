@@ -8,7 +8,15 @@ export function cn(...inputs) {
 }
 
 let defaultCurrency = "USD";
-const MAX_ORDER_RETRY_ATTEMPTS = 3;
+const MAX_ORDER_RETRY_ATTEMPTS = 2; // Reduced from 3 for faster failure on low-spec systems
+
+// Simple in-memory cache for frequently accessed data
+const cache = {
+  companyData: null,
+  paymentMethods: null,
+  cacheTime: 5 * 60 * 1000, // 5 minutes
+  lastUpdate: 0
+};
 
 export async function login(username, password){
   try{
@@ -16,6 +24,9 @@ export async function login(username, password){
       username,
       password
     })
+    // Clear cache on login
+    cache.companyData = null;
+    cache.paymentMethods = null;
     return res
  }catch(err){
   console.error("Login failed: ", err)
@@ -26,6 +37,9 @@ export async function login(username, password){
 export async function logout(){
   try{
     const res = await auth.logout()
+    // Clear cache on logout
+    cache.companyData = null;
+    cache.paymentMethods = null;
     return res
   }catch(err){
     console.error("Logout failed: ", err)
@@ -35,6 +49,7 @@ export async function logout(){
 
 /**
  * Retries an async action multiple times before failing.
+ * Optimized for low-spec systems with faster retry intervals.
  * @template T
  * @param {() => Promise<T>} action
  * @param {string} description
@@ -48,9 +63,13 @@ async function attemptWithRetries(action, description, attempts = MAX_ORDER_RETR
       return await action();
     } catch (err) {
       lastError = err;
-      console.error(`${description} failed (attempt ${attempt}/${attempts}):`, err);
+      // Only log on final attempt to reduce console noise
       if (attempt === attempts) {
-        break;
+        console.error(`${description} failed after ${attempts} attempts:`, err);
+      }
+      // Fast retry for low-spec systems (no delay on first retry, minimal on subsequent)
+      if (attempt < attempts) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 100)); // 100ms, 200ms delays
       }
     }
   }
@@ -290,14 +309,11 @@ export async function getUserTransactionTypes() {
       };
     }
 
-    // Get HA POS Setting with user_mapping
-    const settings = await db.getDocList("HA POS Setting", {
-      fields: ["name"],
-      filters: { ha_pos_settings_on: 1 },
-      limit: 1,
-    });
+    // Get HA POS Settings (Single doctype) with user_mapping
+    const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+    const settingDoc = settingsResponse?.message?.data;
 
-    if (!settings || settings.length === 0) {
+    if (!settingDoc) {
       // No settings found, return default
       return {
         types: ["Sales Invoice", "Quotation"],
@@ -305,8 +321,6 @@ export async function getUserTransactionTypes() {
       };
     }
 
-    // Get full document to access child table
-    const settingDoc = await db.getDoc("HA POS Setting", settings[0].name);
     const userMappings = settingDoc.user_mapping || [];
 
     // Filter mappings for current user and remove duplicates

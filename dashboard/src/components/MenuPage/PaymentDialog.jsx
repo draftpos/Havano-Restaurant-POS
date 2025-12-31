@@ -11,7 +11,7 @@ import MultiCurrencyDialog from "./MultiCurrencyDialog";
 import Keyboard from "@/components/ui/Keyboard";
 import { Textarea } from "@/components/ui/textarea";
 import { createOrderAndPay, makePaymentForTransaction,get_invoice_json } from "@/lib/utils";
-import { db } from "@/lib/frappeClient";
+import { db, call } from "@/lib/frappeClient";
 
 export default function PaymentDialog({
   open,
@@ -41,47 +41,57 @@ export default function PaymentDialog({
     const fetchPaymentMethods = async () => {
       setLoadingPaymentMethods(true);
       try {
-        // First, find the active POS setting
-        // const settings = await db.getDocList("HA POS Setting", {
-        //   fields: ["name"],
-        //   filters: { ha_pos_settings_on: 1 },
-        //   limit: 1,
-        // });
-        // const {message: settings} = await db.getSingleValue("HA POS Setting", "active_pos_setting");
-        const doc = db.getDoc("HA POS Settings");
+        // Get default currency from Global Defaults
+        const { message: defaultCurrency } = await db.getSingleValue("Global Defaults", "default_currency");
+        const systemCurrency = defaultCurrency || "USD";
+
+        // Get HA POS Settings document (Single doctype)
+        const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+        const doc = settingsResponse?.message?.data;
         console.log("HA POS Settings document:", doc);
 
-        if (doc) {
-          
-          // Extract payment methods from child table
-          const methods = (doc.selected_payment_methods || [])
+        let methods = [];
+        
+        if (doc && doc.selected_payment_methods && doc.selected_payment_methods.length > 0) {
+          // Filter payment methods to only include those with currency matching default currency
+          // But always include Cash regardless of currency
+          const filteredMethods = doc.selected_payment_methods
+            .filter((item) => {
+              // Always include Cash, or include if currency matches default currency
+              return item.mode_of_payment === "Cash" || item.currency === systemCurrency;
+            })
             .map((item) => item.mode_of_payment)
             .filter((method) => method); // Remove any null/undefined values
 
-          if (methods.length > 0) {
-            setPaymentMethods(methods);
-            setActiveMethod(methods[0]);
-            setPaymentAmounts(methods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
-          } else {
-            // Fallback to default if no methods found
-            const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
-            setPaymentMethods(defaultMethods);
-            setActiveMethod(defaultMethods[0]);
-            setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
-          }
+          methods = filteredMethods;
+        }
+
+        // Always include Cash as default, whether in selected methods or not
+        if (!methods.includes("Cash")) {
+          methods.unshift("Cash"); // Add Cash at the beginning
         } else {
-          // Fallback to default if no setting found
-          const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
+          // Move Cash to the beginning if it exists
+          methods = methods.filter((m) => m !== "Cash");
+          methods.unshift("Cash");
+        }
+
+        if (methods.length > 0) {
+          setPaymentMethods(methods);
+          setActiveMethod("Cash"); // Always set Cash as default active method
+          setPaymentAmounts(methods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+        } else {
+          // Fallback to Cash only if no methods found
+          const defaultMethods = ["Cash"];
           setPaymentMethods(defaultMethods);
-          setActiveMethod(defaultMethods[0]);
+          setActiveMethod("Cash");
           setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
         }
       } catch (error) {
         console.error("Error fetching payment methods:", error);
-        // Fallback to default on error
-        const defaultMethods = ["Cash", "Card", "Mobile Money", "Bank Transfer"];
+        // Fallback to Cash only on error
+        const defaultMethods = ["Cash"];
         setPaymentMethods(defaultMethods);
-        setActiveMethod(defaultMethods[0]);
+        setActiveMethod("Cash");
         setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
       } finally {
         setLoadingPaymentMethods(false);
@@ -131,17 +141,21 @@ export default function PaymentDialog({
   }, [paymentAmounts, total]);
 
   async function handlePay (){
+    // Prevent double submission
+    if (loading) return;
+    
     setLoading(true);
     try {
       let paidTotal = sumPayments();
       
-      // Get payment breakdown for multiple methods
-      let paymentBreakdown = Object.entries(paymentAmounts)
-        .filter(([k, v]) => parseFloat(v) > 0)
-        .map(([k, v]) => ({
-          payment_method: k,
-          amount: parseFloat(v) || 0
-        }));
+      // Get payment breakdown for multiple methods (optimized: single pass)
+      const paymentEntries = Object.entries(paymentAmounts)
+        .filter(([k, v]) => parseFloat(v) > 0);
+      
+      let paymentBreakdown = paymentEntries.map(([k, v]) => ({
+        payment_method: k,
+        amount: parseFloat(v) || 0
+      }));
 
       // Cap payment amounts at total if total exceeds invoice total
       if (paidTotal > total && paymentBreakdown.length > 0) {
@@ -154,53 +168,52 @@ export default function PaymentDialog({
         paidTotal = total;
       }
 
-      // create a small breakdown note (use original amounts for display, but capped amounts for payment)
-      const breakdown = Object.entries(paymentAmounts)
-        .filter(([k, v]) => parseFloat(v) > 0)
-        .map(([k, v]) => {
-          // Find the capped amount from paymentBreakdown if it exists
-          const cappedPayment = paymentBreakdown.find(p => p.payment_method === k);
-          const displayAmount = cappedPayment ? cappedPayment.amount : parseFloat(v);
-          return `${k}:${displayAmount.toFixed(2)}`;
-        })
+      // Create breakdown note (optimized: single pass)
+      const breakdown = paymentBreakdown
+        .map(p => `${p.payment_method}:${p.amount.toFixed(2)}`)
         .join(", ");
 
-      const payment_method = breakdown.split(",").length > 1 ? "Multi" : (Object.entries(paymentAmounts).find(([,v]) => parseFloat(v) > 0)?.[0] || "Cash");
+      const payment_method = paymentBreakdown.length > 1 ? "Multi" : (paymentBreakdown[0]?.payment_method || "Cash");
 
       const fullNote = note ? `${note} | ${breakdown}` : breakdown;
 
       let res;
       
       if (isExistingTransaction && transactionDoctype && transactionName) {
-      try {
-      const res = await get_invoice_json(transactionName);
-      console.log("Invoice JSON returned from backend:", res);
+        // Only fetch invoice JSON if needed (optimized: conditional)
+        try {
+          const invoiceJson = await get_invoice_json(transactionName);
+          console.log("Invoice JSON returned from backend:", invoiceJson);
 
-      // Convert JSON to string
-      const jsonStr = JSON.stringify(res, null, 2); // pretty-print with 2 spaces
+          // Convert JSON to string
+          const jsonStr = JSON.stringify(invoiceJson, null, 2);
 
-      // Create a blob
-      const blob = new Blob([jsonStr], { type: "text/plain" });
-
-      // Create a download link
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `${transactionName}.txt`; // name the file as invoice name
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Error fetching invoice JSON:", error);
-    }
+          // Create a blob and download (optimized: async download)
+          const blob = new Blob([jsonStr], { type: "text/plain" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = `${transactionName}.txt`;
+          document.body.appendChild(link);
+          link.click();
+          // Cleanup asynchronously (non-blocking)
+          setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+          }, 0);
+        } catch (error) {
+          console.error("Error fetching invoice JSON:", error);
+          // Continue with payment even if JSON fetch fails
+        }
 
         // Make payment for existing Sales Invoice or Quotation
+        // Always send paymentBreakdown if it exists (even for single payment)
         res = await makePaymentForTransaction(
           transactionDoctype,
           transactionName,
           paidTotal > 0 ? paidTotal : null,
           payment_method,
           fullNote,
-          paymentBreakdown.length > 1 ? paymentBreakdown : null
+          paymentBreakdown.length > 0 ? paymentBreakdown : null
         );
       } else {
         // Create new order and payment (original flow)
@@ -223,7 +236,6 @@ export default function PaymentDialog({
       if (res && res.success) {
         if (typeof onPaid === "function") onPaid(res);
         if (typeof onOpenChange === "function") onOpenChange(false);
-        console.log("payment correct");
       } else {
         console.error("Payment failed", res);
       }

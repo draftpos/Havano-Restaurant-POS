@@ -18,9 +18,26 @@ function useMultiCurrencyPayment() {
 
 		try {
 			// 🔹 Remove zero / empty payments
-			const cleanedPayments = Object.fromEntries(
-				Object.entries(payments).filter(([_, amount]) => Number(amount) > 0)
-			);
+			// Payments can be either {key: amount} or {key: {mode, currency, amount}}
+			const cleanedPayments = {};
+			Object.entries(payments || {}).forEach(([key, value]) => {
+				if (value && typeof value === 'object' && 'amount' in value) {
+					// Format: {mode, currency, amount}
+					if (Number(value.amount) > 0) {
+						cleanedPayments[key] = value;
+					}
+				} else {
+					// Format: direct amount value
+					if (Number(value) > 0) {
+						cleanedPayments[key] = value;
+					}
+				}
+			});
+
+			// Check if we have any payments after cleaning
+			if (Object.keys(cleanedPayments).length === 0) {
+				throw new Error("No valid payments provided. Please enter payment amounts.");
+			}
 
 			const res = await call.post("havano_restaurant_pos.api.make_multi_currency_payment", {
 				customer,
@@ -30,7 +47,14 @@ function useMultiCurrencyPayment() {
 			const data = res?.message;
 
 			if (!data?.success) {
-				throw new Error(data?.message || "Payment failed");
+				// Include details in the error message for better debugging
+				const errorMsg = data?.details 
+					? `${data?.message || "Payment failed"}: ${data?.details}`
+					: data?.message || "Payment failed";
+				const error = new Error(errorMsg);
+				error.details = data?.details;
+				error.errors = data?.errors;
+				throw error;
 			}
 
 			setSuccess(true);
