@@ -75,7 +75,7 @@ const Cart = () => {
       return;
     }
 
-    if (cart.some(item => item.price < 1)) {
+    if (cart.some(item => item.price <= 0)) {
       toast.error("Invalid item price", {
         description: "One or more items have invalid prices. Please update item prices before proceeding.",
         duration: 5000,
