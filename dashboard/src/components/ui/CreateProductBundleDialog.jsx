@@ -20,7 +20,7 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState(0);
   const [tableRows, setTableRows] = useState([
-    { id: "1", selectedOption: "", quantity: 1 },
+    { id: "1", selectedOption: "", quantity: "" },
   ]);
 
   const {
@@ -37,7 +37,8 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
     },
   });
 
-  const { menuItems, fetchMenuItems, productBundles, fetchProductBundles } = useMenuStore();
+  const { menuItems, fetchMenuItems, productBundles, fetchProductBundles } =
+    useMenuStore();
 
   useEffect(() => {
     fetchMenuItems();
@@ -50,14 +51,16 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
     error: bundleError,
   } = useCreateProductBundle();
 
-  const productOptions = menuItems.filter((item => 
-    !productBundles.some(bundle => bundle.new_item_code === item.name)
-  ))
-  .map((item) => ({
-    id: item.name,
-    label: item.item_name,
-    price: item.standard_rate ?? item.price ?? 0,
-  }));
+  const productOptions = menuItems
+    .filter(
+      (item) =>
+        !productBundles.some((bundle) => bundle.new_item_code === item.name)
+    )
+    .map((item) => ({
+      id: item.name,
+      label: item.item_name,
+      price: item.standard_rate ?? item.price ?? 0,
+    }));
 
   const handlePriceChange = (items) => {
     const itemsArray = Object.entries(items);
@@ -94,7 +97,7 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
   const onSubmit = async (data) => {
     const items = tableRows.reduce((acc, row) => {
       if (row.selectedOption && row.quantity > 0) {
-        acc[row.selectedOption] = row.quantity;
+        acc[row.selectedOption] = Number(row.quantity);
       }
       return acc;
     }, {});
@@ -107,7 +110,7 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
           onCreated(result.item);
         }
         reset();
-        setTableRows([{ id: "1", selectedOption: "", quantity: 1 }]);
+        setTableRows([{ id: "1", selectedOption: "", quantity: "" }]);
         setTotalPrice(0);
         onOpenChange(false);
         toast.success("Item created successfully", {
@@ -133,7 +136,7 @@ export function CreateProductBundleDialog({ open, onOpenChange, onCreated }) {
   const handleOpenChange = (isOpen) => {
     if (!isOpen) {
       reset();
-      setTableRows([{ id: "1", selectedOption: "", quantity: 1 }]);
+      setTableRows([{ id: "1", selectedOption: "", quantity: "" }]);
       setTotalPrice(0);
     }
     onOpenChange(isOpen);

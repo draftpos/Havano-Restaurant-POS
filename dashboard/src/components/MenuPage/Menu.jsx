@@ -76,15 +76,15 @@ const Menu = () => {
   }, [fetchMenuItems]);
 
   useEffect(() => {
-    const handleF1Click = (event) => {
-      if (event.key === "F1") {
+    const handleF3Click = (event) => {
+      if (event.key === "F3") {
         event.preventDefault();
         setOpenMixDialog(true);
       }
     };
-    window.addEventListener("keydown", handleF1Click);
+    window.addEventListener("keydown", handleF3Click);
     return () => {
-      window.removeEventListener("keydown", handleF1Click);
+      window.removeEventListener("keydown", handleF3Click);
     }
   })
 
@@ -113,6 +113,20 @@ const Menu = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [target]);
 
+  useEffect(() => {
+    const handleF1Click = (event) => {
+      if (event.key === "F1") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchTerm("");
+        setTarget("menu");
+      }
+    };
+    window.addEventListener("keydown", handleF1Click);
+    return () => {
+      window.removeEventListener("keydown", handleF1Click);
+    };
+  }, []);
 
   useEffect(() => {
     if (openMixDialog){
@@ -143,7 +157,7 @@ const Menu = () => {
             onClick={() => setOpenMixDialog(true)}
             className="w-[100px] font-extrabold"
           >
-            Mix (F1)
+            Mix (F3)
           </Button>
           <Select
             value={transactionType}

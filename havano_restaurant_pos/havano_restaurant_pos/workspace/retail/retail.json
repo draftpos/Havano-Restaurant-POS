@@ -1,7 +1,7 @@
 {
  "charts": [],
- "content": "[{\"id\":\"f_lNvo1oFs\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Restaurant</span>\",\"col\":12}},{\"id\":\"1ikTTSmQeO\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Dashboard\",\"col\":3}},{\"id\":\"TszUN-8Zfc\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Order\",\"col\":3}},{\"id\":\"tS0X_YNXjz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"p9uMqNPTj3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"wrUBv7H7SE\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ha Order\",\"col\":3}},{\"id\":\"us40zjCT0j\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"Zr5d7fnGeX\",\"type\":\"card\",\"data\":{\"card_name\":\"Master\",\"col\":4}}]",
- "creation": "2025-11-22 09:36:15.588166",
+ "content": "[{\"id\":\"f_lNvo1oFs\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Retail</span>\",\"col\":12}},{\"id\":\"1ikTTSmQeO\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Dashboard\",\"col\":3}},{\"id\":\"TszUN-8Zfc\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Order\",\"col\":3}},{\"id\":\"tS0X_YNXjz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"p9uMqNPTj3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"wrUBv7H7SE\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ha Order\",\"col\":3}},{\"id\":\"us40zjCT0j\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"Zr5d7fnGeX\",\"type\":\"card\",\"data\":{\"card_name\":\"Master\",\"col\":4}}]",
+ "creation": "2025-12-31 08:19:12.642219",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -11,7 +11,7 @@
  "idx": 0,
  "indicator_color": "green",
  "is_hidden": 0,
- "label": "Restaurant",
+ "label": "Retail",
  "links": [
   {
    "hidden": 0,
@@ -43,17 +43,17 @@
    "type": "Link"
   }
  ],
- "modified": "2025-11-22 17:30:05.182075",
+ "modified": "2025-12-31 08:22:17.853704",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
- "name": "Restaurant",
+ "name": "Retail",
  "number_cards": [],
  "owner": "Administrator",
  "parent_page": "",
  "public": 1,
  "quick_lists": [],
  "roles": [],
- "sequence_id": 1.0,
+ "sequence_id": 1.1,
  "shortcuts": [
   {
    "color": "Grey",
@@ -95,5 +95,5 @@
    "type": "DocType"
   }
  ],
- "title": "Restaurant"
+ "title": "Retail"
 }
