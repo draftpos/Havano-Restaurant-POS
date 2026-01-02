@@ -1592,15 +1592,39 @@ def process_payment_for_transaction_background(
                 )
                 payment_entry.mode_of_payment = original_method  # Use original method name
 
-                # Add reference to the Sales Invoice
-                payment_entry.append(
-                    "references",
-                    {
-                        "reference_doctype": doctype,
-                        "reference_name": docname,
-                        "allocated_amount": paid_amount,
-                    },
-                )
+                # Get fresh outstanding amount right before allocation to handle concurrent payments
+                current_outstanding = outstanding_amount  # Default to original outstanding
+                try:
+                    doc.refresh()
+                    current_outstanding = (
+                        doc.outstanding_amount
+                        if hasattr(doc, "outstanding_amount")
+                        else doc.grand_total
+                    )
+                    # Cap allocated amount to outstanding amount
+                    allocated_amount = min(float(paid_amount), float(current_outstanding))
+                except Exception:
+                    # If refresh fails, use the original paid_amount
+                    allocated_amount = paid_amount
+
+                # Only add reference if there's an amount to allocate
+                if allocated_amount > 0:
+                    # Add reference to the Sales Invoice
+                    payment_entry.append(
+                        "references",
+                        {
+                            "reference_doctype": doctype,
+                            "reference_name": docname,
+                            "allocated_amount": allocated_amount,
+                        },
+                    )
+                else:
+                    # If no amount to allocate (invoice already fully paid), skip this payment
+                    frappe.log_error(
+                        f"Skipping payment for {original_method}: Invoice {docname} already fully paid. Outstanding: {current_outstanding}, Attempted: {paid_amount}",
+                        "Payment Entry - Invoice Already Paid"
+                    )
+                    continue
 
                 # Insert payment entry
                 try:
@@ -1662,14 +1686,39 @@ def process_payment_for_transaction_background(
                     
                     payment_entry.remarks = note or f"Payment for {doctype} {docname} - {original_method}"
                     payment_entry.mode_of_payment = original_method  # Use original method name
-                    payment_entry.append(
-                        "references",
-                        {
-                            "reference_doctype": doctype,
-                            "reference_name": docname,
-                            "allocated_amount": paid_amount,
-                        },
-                    )
+                    
+                    # Get fresh outstanding amount right before allocation to handle concurrent payments
+                    current_outstanding = outstanding_amount  # Default to original outstanding
+                    try:
+                        doc.refresh()
+                        current_outstanding = (
+                            doc.outstanding_amount
+                            if hasattr(doc, "outstanding_amount")
+                            else doc.grand_total
+                        )
+                        # Cap allocated amount to outstanding amount
+                        allocated_amount = min(float(paid_amount), float(current_outstanding))
+                    except Exception:
+                        # If refresh fails, use the original paid_amount
+                        allocated_amount = paid_amount
+                    
+                    # Only add reference if there's an amount to allocate
+                    if allocated_amount > 0:
+                        payment_entry.append(
+                            "references",
+                            {
+                                "reference_doctype": doctype,
+                                "reference_name": docname,
+                                "allocated_amount": allocated_amount,
+                            },
+                        )
+                    else:
+                        # If no amount to allocate (invoice already fully paid), skip this payment
+                        frappe.log_error(
+                            f"Skipping payment for {original_method}: Invoice {docname} already fully paid. Outstanding: {current_outstanding}, Attempted: {paid_amount}",
+                            "Payment Entry - Invoice Already Paid"
+                        )
+                        continue
                     # Use frappe.flags to bypass validation
                     frappe.flags.ignore_validate = True
                     frappe.flags.ignore_links = True
