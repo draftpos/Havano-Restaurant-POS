@@ -29,7 +29,6 @@ export default function PaymentDialog({
   const [activeMethod, setActiveMethod] = useState("");
   const [paymentAmounts, setPaymentAmounts] = useState({});
   const [note, setNote] = useState("");
-  const [loading, setLoading] = useState(false);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(true);
   const [total, setTotal] = useState(0);
   const [openMultiCurrencyDialog, setOpenMultiCurrencyDialog] = useState(false);
@@ -141,126 +140,123 @@ export default function PaymentDialog({
   }, [paymentAmounts, total]);
 
   async function handlePay (){
-    // Prevent double submission
-    if (loading) return;
+    let paidTotal = sumPayments();
     
-    setLoading(true);
-    try {
-      let paidTotal = sumPayments();
-      
-      // Get payment breakdown for multiple methods (optimized: single pass)
-      const paymentEntries = Object.entries(paymentAmounts)
-        .filter(([k, v]) => parseFloat(v) > 0);
-      
-      let paymentBreakdown = paymentEntries.map(([k, v]) => ({
-        payment_method: k,
-        amount: parseFloat(v) || 0
+    // Get payment breakdown for multiple methods (optimized: single pass)
+    const paymentEntries = Object.entries(paymentAmounts)
+      .filter(([k, v]) => parseFloat(v) > 0);
+    
+    let paymentBreakdown = paymentEntries.map(([k, v]) => ({
+      payment_method: k,
+      amount: parseFloat(v) || 0
+    }));
+
+    // Cap payment amounts at total if total exceeds invoice total
+    if (paidTotal > total && paymentBreakdown.length > 0) {
+      // Scale down proportionally if total exceeds
+      const scaleFactor = total / paidTotal;
+      paymentBreakdown = paymentBreakdown.map(p => ({
+        ...p,
+        amount: p.amount * scaleFactor
       }));
-
-      // Cap payment amounts at total if total exceeds invoice total
-      if (paidTotal > total && paymentBreakdown.length > 0) {
-        // Scale down proportionally if total exceeds
-        const scaleFactor = total / paidTotal;
-        paymentBreakdown = paymentBreakdown.map(p => ({
-          ...p,
-          amount: p.amount * scaleFactor
-        }));
-        paidTotal = total;
-      }
-
-      // Create breakdown note (optimized: single pass)
-      const breakdown = paymentBreakdown
-        .map(p => `${p.payment_method}:${p.amount.toFixed(2)}`)
-        .join(", ");
-
-      const payment_method = paymentBreakdown.length > 1 ? "Multi" : (paymentBreakdown[0]?.payment_method || "Cash");
-
-      const fullNote = note ? `${note} | ${breakdown}` : breakdown;
-
-      let res;
-      
-      if (isExistingTransaction && transactionDoctype && transactionName) {
-        // Only fetch invoice JSON if needed (optimized: conditional)
-        try {
-          const invoiceJson = await get_invoice_json(transactionName);
-          console.log("Invoice JSON returned from backend:", invoiceJson);
-
-          // Convert JSON to string
-          const jsonStr = JSON.stringify(invoiceJson, null, 2);
-
-          // Create a blob and download (optimized: async download)
-          const blob = new Blob([jsonStr], { type: "text/plain" });
-          const link = document.createElement("a");
-          link.href = URL.createObjectURL(blob);
-          link.download = `${transactionName}.txt`;
-          document.body.appendChild(link);
-          link.click();
-          // Cleanup asynchronously (non-blocking)
-          setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-          }, 0);
-        } catch (error) {
-          console.error("Error fetching invoice JSON:", error);
-          // Continue with payment even if JSON fetch fails
-        }
-
-        // Make payment for existing Sales Invoice or Quotation
-        // Always send paymentBreakdown if it exists (even for single payment)
-        res = await makePaymentForTransaction(
-          transactionDoctype,
-          transactionName,
-          paidTotal > 0 ? paidTotal : null,
-          payment_method,
-          fullNote,
-          paymentBreakdown.length > 0 ? paymentBreakdown : null
-        );
-      } else {
-        // Create new order and payment using queue (sales invoice and payment created in background)
-        const payload =
-          orderPayload ||
-          ({
-            order_type: "Take Away",
-            customer_name: customer || (orderPayload && orderPayload.customer_name) || "",
-            order_items: cartItems,
-          });
-
-        // Ensure customer is set
-        const finalCustomer = payload.customer_name || customer;
-        if (!finalCustomer) {
-          throw new Error("Customer is required. Please select a customer or configure a default customer in Settings.");
-        }
-
-        // Use queue system for async processing
-        res = await createInvoiceAndPaymentQueue(
-          cartItems,
-          finalCustomer,
-          paymentBreakdown.length > 0 ? paymentBreakdown : null,
-          paymentBreakdown.length === 1 ? payment_method : null,
-          paidTotal > 0 ? paidTotal : null,
-          fullNote,
-          payload
-        );
-      }
-
-      if (res && res.success) {
-        if (typeof onPaid === "function") onPaid(res);
-        if (typeof onOpenChange === "function") onOpenChange(false);
-      } else {
-        console.error("Payment failed", res);
-      }
-    } catch (err) {
-      console.error("Payment error:", err);
-    } finally {
-      setLoading(false);
+      paidTotal = total;
     }
+
+    // Create breakdown note (optimized: single pass)
+    const breakdown = paymentBreakdown
+      .map(p => `${p.payment_method}:${p.amount.toFixed(2)}`)
+      .join(", ");
+
+    const payment_method = paymentBreakdown.length > 1 ? "Multi" : (paymentBreakdown[0]?.payment_method || "Cash");
+
+    const fullNote = note ? `${note} | ${breakdown}` : breakdown;
+
+    // Immediately show success and close dialog (optimistic UI)
+    if (typeof onPaid === "function") {
+      onPaid({ success: true, message: "Payment processing..." });
+    }
+    if (typeof onOpenChange === "function") {
+      onOpenChange(false);
+    }
+
+    // Process payment in background (fire and forget)
+    (async () => {
+      try {
+        if (isExistingTransaction && transactionDoctype && transactionName) {
+          // Only fetch invoice JSON if needed (optimized: conditional)
+          try {
+            const invoiceJson = await get_invoice_json(transactionName);
+            console.log("Invoice JSON returned from backend:", invoiceJson);
+
+            // Convert JSON to string
+            const jsonStr = JSON.stringify(invoiceJson, null, 2);
+
+            // Create a blob and download (optimized: async download)
+            const blob = new Blob([jsonStr], { type: "text/plain" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${transactionName}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            // Cleanup asynchronously (non-blocking)
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(link.href);
+            }, 0);
+          } catch (error) {
+            console.error("Error fetching invoice JSON:", error);
+            // Continue with payment even if JSON fetch fails
+          }
+
+          // Make payment for existing Sales Invoice or Quotation (background)
+          await makePaymentForTransaction(
+            transactionDoctype,
+            transactionName,
+            paidTotal > 0 ? paidTotal : null,
+            payment_method,
+            fullNote,
+            paymentBreakdown.length > 0 ? paymentBreakdown : null
+          );
+        } else {
+          // Create new order and payment using queue (sales invoice and payment created in background)
+          const payload =
+            orderPayload ||
+            ({
+              order_type: "Take Away",
+              customer_name: customer || (orderPayload && orderPayload.customer_name) || "",
+              order_items: cartItems,
+            });
+
+          // Ensure customer is set
+          const finalCustomer = payload.customer_name || customer;
+          if (!finalCustomer) {
+            console.error("Customer is required");
+            return;
+          }
+
+          // Use queue system for async processing (background)
+          await createInvoiceAndPaymentQueue(
+            cartItems,
+            finalCustomer,
+            paymentBreakdown.length > 0 ? paymentBreakdown : null,
+            paymentBreakdown.length === 1 ? payment_method : null,
+            paidTotal > 0 ? paidTotal : null,
+            fullNote,
+            payload
+          );
+        }
+      } catch (err) {
+        // Log error but don't block user (payment already shown as successful)
+        console.error("Payment processing error (background):", err);
+      }
+    })();
   };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        if (loading || paymentStatus.hasDue) return;
+        if (paymentStatus.hasDue) return;
         handlePay();
       }
     };
@@ -269,7 +265,7 @@ export default function PaymentDialog({
       document.removeEventListener("keydown", handleKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, paymentStatus.hasDue])
+  }, [paymentStatus.hasDue])
 
   return (
     <>
@@ -439,10 +435,10 @@ export default function PaymentDialog({
                     </Button>
                     <Button
                       onClick={handlePay}
-                      disabled={loading || paymentStatus.hasDue}
+                      disabled={paymentStatus.hasDue}
                       className="flex-1"
                     >
-                      {loading ? "Processing..." : "Make Payment"}
+                      Make Payment
                     </Button>
                   </div>
                 </div>

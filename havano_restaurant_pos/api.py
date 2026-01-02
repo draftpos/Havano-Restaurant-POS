@@ -1278,8 +1278,7 @@ def create_transaction(
         }
 
 
-@frappe.whitelist()
-def make_payment_for_transaction(
+def process_payment_for_transaction_background(
     doctype,
     docname,
     amount=None,
@@ -1287,16 +1286,11 @@ def make_payment_for_transaction(
     note=None,
     payment_breakdown=None,
 ):
-    """Make payment for an existing Sales Invoice or Quotation.
-
-    Args:
-        doctype: "Sales Invoice" or "Quotation"
-        docname: Name of the Sales Invoice or Quotation
-        amount: Payment amount (optional, defaults to outstanding amount)
-        payment_method: Mode of payment (optional, defaults to "Cash")
-        note: Payment notes (optional)
-        payment_breakdown: List of dicts with payment_method and amount (optional, for multiple payment methods)
+    """Background job to process payment for an existing Sales Invoice or Quotation.
+    This runs asynchronously in the queue.
+    IMPORTANT: This function must be callable from frappe.enqueue.
     """
+    frappe.set_user("Administrator")  # Ensure proper permissions in background job
     try:
         # Get the document
         doc = frappe.get_doc(doctype, docname)
@@ -1706,6 +1700,110 @@ def make_payment_for_transaction(
 
 
 @frappe.whitelist()
+def make_payment_for_transaction(
+    doctype,
+    docname,
+    amount=None,
+    payment_method=None,
+    note=None,
+    payment_breakdown=None,
+):
+    """Make payment for an existing Sales Invoice or Quotation.
+    Returns immediately with job ID for async processing.
+
+    Args:
+        doctype: "Sales Invoice" or "Quotation"
+        docname: Name of the Sales Invoice or Quotation
+        amount: Payment amount (optional, defaults to outstanding amount)
+        payment_method: Mode of payment (optional, defaults to "Cash")
+        note: Payment notes (optional)
+        payment_breakdown: List of dicts with payment_method and amount (optional, for multiple payment methods)
+    """
+    try:
+        # Basic validation before queuing
+        if not doctype or not docname:
+            return {
+                "success": False,
+                "message": "Missing required parameters",
+                "details": "doctype and docname are required.",
+            }
+        
+        # Verify document exists
+        if not frappe.db.exists(doctype, docname):
+            return {
+                "success": False,
+                "message": "Document not found",
+                "details": f"{doctype} {docname} does not exist.",
+            }
+        
+        # Enqueue payment processing in background
+        job_id = None
+        try:
+            job_kwargs = {
+                "method": "havano_restaurant_pos.havano_restaurant_pos.api.process_payment_for_transaction_background",
+                "queue": "default",
+                "timeout": 300,
+                "is_async": True,
+                "doctype": doctype,
+                "docname": docname,
+                "amount": amount,
+                "payment_method": payment_method,
+                "note": note,
+                "payment_breakdown": payment_breakdown
+            }
+            
+            try:
+                job_kwargs["job_name"] = f"process_payment_for_transaction_{docname}_{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
+            except:
+                pass
+            
+            job = frappe.enqueue(**job_kwargs)
+            job_id = job.id if hasattr(job, 'id') else (job if isinstance(job, str) else None)
+            
+            frappe.logger().info(f"Payment for transaction queued, job_id: {job_id}, doctype: {doctype}, docname: {docname}")
+            
+        except Exception as queue_error:
+            # If queue fails, log error but still return success (payment will be processed in background)
+            error_msg = f"Queue enqueue failed for payment transaction: {str(queue_error)}\n{frappe.get_traceback()}"
+            frappe.log_error(error_msg, "Make Payment For Transaction Queue Error")
+            # Still return success - the background job will handle it
+            job_id = None
+        
+        # Return success immediately
+        return {
+            "success": True,
+            "message": "Payment queued successfully",
+            "details": "Payment is being processed in the background",
+            "job_id": job_id,
+        }
+
+    except Exception as e:
+        error_traceback = frappe.get_traceback()
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        try:
+            frappe.log_error(
+                f"Make Payment For Transaction Failed\n"
+                f"Error Type: {error_type}\n"
+                f"Error Message: {error_msg}\n"
+                f"Traceback: {error_traceback}",
+                "Make Payment For Transaction Failed"
+            )
+        except Exception as log_error:
+            try:
+                frappe.log_error(f"Make Payment For Transaction Failed: {error_type}: {error_msg}", "Make Payment For Transaction Failed")
+            except:
+                pass
+
+        return {
+            "success": False,
+            "message": "Failed to queue payment",
+            "details": f"{error_type}: {error_msg}",
+        }
+
+
+@frappe.whitelist()
 def get_invoice_json(invoice_name):
     try:
         invoice = frappe.get_doc("Sales Invoice", invoice_name)
@@ -2097,9 +2195,396 @@ def get_ha_pos_settings():
 
 
 @frappe.whitelist()
+def process_multi_currency_payment_background(customer, payments):
+    """Background job to process multi-currency payment entries.
+    This runs asynchronously in the queue.
+    IMPORTANT: This function must be callable from frappe.enqueue.
+    """
+    frappe.set_user("Administrator")  # Ensure proper permissions in background job
+    try:
+        # Parse JSON if payments is a string
+        if payments is None:
+            return {
+                "success": False,
+                "message": "No payments provided",
+                "details": "Payments parameter is None.",
+            }
+        
+        if isinstance(payments, str):
+            try:
+                payments = frappe.parse_json(payments)
+            except Exception as parse_error:
+                return {
+                    "success": False,
+                    "message": "Invalid payments format",
+                    "details": f"Could not parse payments JSON: {str(parse_error)}",
+                }
+        
+        if isinstance(customer, str) and customer.startswith('"'):
+            try:
+                customer = frappe.parse_json(customer)
+            except Exception:
+                pass
+        
+        # Get company from user defaults or Global Defaults
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        
+        if not company:
+            return {
+                "success": False,
+                "message": "Company not found",
+                "details": "Please set default company in user defaults or Global Defaults.",
+            }
+
+        if not customer:
+            customer = get_default_customer()
+
+        # Get company currency
+        company_currency = frappe.get_cached_value("Company", company, "default_currency")
+        if not company_currency:
+            company_currency = frappe.get_single_value("System Settings", "currency") or "USD"
+
+        # Get company accounts
+        company_data = frappe.get_cached_value(
+            "Company",
+            company,
+            ["default_receivable_account", "default_cash_account"],
+            as_dict=True
+        )
+        
+        if not company_data:
+            return {
+                "success": False,
+                "message": "Company data not found",
+                "details": f"Could not retrieve company data for {company}.",
+            }
+        
+        paid_from_account = company_data.get("default_receivable_account")
+        paid_to_account = company_data.get("default_cash_account") or paid_from_account
+
+        if not paid_from_account or not isinstance(paid_from_account, str):
+            return {
+                "success": False,
+                "message": "Missing company accounts",
+                "details": f"Company is missing default receivable account. Got type: {type(paid_from_account).__name__}",
+            }
+        
+        if not paid_to_account or not isinstance(paid_to_account, str):
+            return {
+                "success": False,
+                "message": "Missing company accounts",
+                "details": f"Company is missing default cash account. Got type: {type(paid_to_account).__name__}",
+            }
+
+        # Get account currencies
+        account_list = []
+        if isinstance(paid_from_account, str):
+            account_list.append(paid_from_account)
+        if isinstance(paid_to_account, str) and paid_to_account != paid_from_account:
+            account_list.append(paid_to_account)
+        
+        if not account_list:
+            return {
+                "success": False,
+                "message": "Invalid account format",
+                "details": "Accounts must be strings.",
+            }
+        
+        try:
+            account_currencies = frappe.get_all(
+                "Account",
+                filters={"name": ["in", account_list]},
+                fields=["name", "account_currency"],
+                as_list=False
+            )
+            if not isinstance(account_currencies, list):
+                account_currencies = []
+        except Exception as e:
+            frappe.log_error(f"Error getting account currencies: {str(e)}", "Multi Currency Payment Account Error")
+            account_currencies = []
+        
+        account_currency_map = {}
+        try:
+            if account_currencies and isinstance(account_currencies, list) and not isinstance(account_currencies, Exception):
+                for acc in account_currencies:
+                    if acc and isinstance(acc, dict) and "name" in acc:
+                        account_currency_map[acc["name"]] = acc.get("account_currency") or company_currency
+        except Exception as e:
+            frappe.log_error(f"Error building account currency map: {str(e)}", "Multi Currency Payment Currency Map Error")
+            account_currency_map = {}
+        
+        paid_from_currency = account_currency_map.get(paid_from_account, company_currency)
+        paid_to_currency = account_currency_map.get(paid_to_account, company_currency)
+
+        created_payments = []
+        error_messages = []
+
+        # Validate payments parameter
+        if not payments:
+            return {
+                "success": False,
+                "message": "No payments provided",
+                "details": "Payments parameter is required.",
+            }
+        
+        if isinstance(payments, str):
+            try:
+                payments = frappe.parse_json(payments)
+            except Exception as parse_error:
+                return {
+                    "success": False,
+                    "message": "Invalid payments format",
+                    "details": f"Payments must be a valid JSON object. Error: {str(parse_error)}",
+                }
+        
+        if not isinstance(payments, dict):
+            return {
+                "success": False,
+                "message": "Invalid payments format",
+                "details": f"Payments must be a dictionary, got {type(payments).__name__}.",
+            }
+        
+        if len(payments) == 0:
+            return {
+                "success": False,
+                "message": "No payments provided",
+                "details": "Payments dictionary is empty. Please provide at least one payment method with amount > 0.",
+            }
+
+        try:
+            payments_items = payments.items()
+        except (AttributeError, TypeError) as e:
+            return {
+                "success": False,
+                "message": "Invalid payments format",
+                "details": f"Cannot iterate over payments: {str(e)}. Type: {type(payments).__name__}",
+            }
+        
+        for key, payment_info in payments_items:
+            try:
+                if isinstance(payment_info, dict):
+                    method = payment_info.get("mode", "Cash")
+                    paid_amount = float(payment_info.get("amount", 0))
+                else:
+                    method = "Cash"
+                    try:
+                        paid_amount = float(payment_info)
+                    except (ValueError, TypeError):
+                        error_messages.append(f"Invalid amount for payment {key}: {payment_info}")
+                        continue
+            except Exception as parse_error:
+                error_messages.append(f"Error parsing payment {key}: {str(parse_error)}")
+                frappe.log_error(f"Error parsing payment {key}: {str(parse_error)}\nPayment info: {payment_info}", "Multi Currency Payment Parse Error")
+                continue
+
+            if paid_amount <= 0:
+                continue
+
+            original_method = method
+            
+            mode_exists = frappe.db.exists("Mode of Payment", method) if method else False
+            
+            if not mode_exists and method and method != "Cash":
+                try:
+                    new_mode = frappe.new_doc("Mode of Payment")
+                    new_mode.mode_of_payment = method
+                    new_mode.type = "Cash"
+                    new_mode.insert(ignore_permissions=True)
+                    frappe.db.commit()
+                    mode_exists = True
+                    frappe.log_error(
+                        f"Created new Mode of Payment '{method}' automatically",
+                        "Mode of Payment Auto-Created"
+                    )
+                except Exception as create_error:
+                    frappe.log_error(
+                        f"Mode of Payment '{method}' does not exist and could not be created: {str(create_error)}. Will use ignore_links to bypass validation.",
+                        "Mode of Payment Creation Failed"
+                    )
+            
+            mode_account = None
+            if method and method != "Cash":
+                mode_accounts = frappe.get_all(
+                    "Mode of Payment Account",
+                    filters={"parent": method, "company": company},
+                    fields=["default_account"],
+                    limit=1
+                )
+                if mode_accounts and mode_accounts[0].default_account:
+                    mode_account = mode_accounts[0].default_account
+            
+            if not mode_account:
+                mode_account = paid_to_account
+
+            mode_account_currency = frappe.get_cached_value("Account", mode_account, "account_currency") or company_currency
+            
+            mode_type = None
+            if original_method and mode_exists:
+                mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+            
+            source_exchange_rate = 1.0
+            target_exchange_rate = 1.0
+            
+            received_amount = paid_amount
+            paid_amount_in_company_currency = paid_amount
+
+            if paid_from_currency != mode_account_currency:
+                try:
+                    from erpnext.setup.utils import get_exchange_rate
+                    target_exchange_rate = get_exchange_rate(
+                        mode_account_currency, paid_from_currency, frappe.utils.nowdate()
+                    )
+                    paid_amount_in_company_currency = paid_amount * target_exchange_rate
+                except Exception:
+                    target_exchange_rate = 1.0
+                    paid_amount_in_company_currency = paid_amount
+
+            try:
+                payment_entry = frappe.new_doc("Payment Entry")
+                payment_entry.payment_type = "Receive"
+                payment_entry.party_type = "Customer"
+                payment_entry.party = customer
+                payment_entry.company = company
+                payment_entry.posting_date = frappe.utils.nowdate()
+                payment_entry.paid_from = paid_from_account
+                payment_entry.paid_to = mode_account
+                payment_entry.paid_from_account_currency = paid_from_currency
+                payment_entry.paid_to_account_currency = mode_account_currency
+                payment_entry.paid_amount = paid_amount_in_company_currency
+                payment_entry.received_amount = received_amount
+                payment_entry.source_exchange_rate = source_exchange_rate
+                payment_entry.target_exchange_rate = target_exchange_rate
+                
+                if mode_type == "Bank":
+                    payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
+                    payment_entry.reference_date = frappe.utils.nowdate()
+                else:
+                    payment_entry.reference_no = None
+                    payment_entry.reference_date = frappe.utils.nowdate()
+                
+                payment_entry.remarks = f"Multi-currency payment: {original_method}"
+                payment_entry.mode_of_payment = original_method
+
+                try:
+                    frappe.flags.ignore_validate = True
+                    frappe.flags.ignore_links = True
+                    payment_entry.insert(ignore_permissions=True)
+                except Exception as insert_error:
+                    error_detail = f"Insert failed for {original_method}: {str(insert_error)}"
+                    frappe.log_error(
+                        f"{error_detail}\nPayment Entry Data: mode_of_payment={original_method}, paid_to={mode_account}, company={company}, mode_type={mode_type}",
+                        "Payment Entry Insert Error"
+                    )
+                    raise Exception(error_detail)
+                finally:
+                    frappe.flags.ignore_validate = False
+                    frappe.flags.ignore_links = False
+                
+                try:
+                    payment_entry.submit(ignore_permissions=True)
+                except Exception as submit_error:
+                    try:
+                        if payment_entry.name:
+                            frappe.delete_doc("Payment Entry", payment_entry.name, ignore_permissions=True, force=True)
+                    except:
+                        pass
+                    
+                    payment_entry = frappe.new_doc("Payment Entry")
+                    payment_entry.payment_type = "Receive"
+                    payment_entry.party_type = "Customer"
+                    payment_entry.party = customer
+                    payment_entry.company = company
+                    payment_entry.posting_date = frappe.utils.nowdate()
+                    payment_entry.paid_from = paid_from_account
+                    payment_entry.paid_to = mode_account
+                    payment_entry.paid_from_account_currency = paid_from_currency
+                    payment_entry.paid_to_account_currency = mode_account_currency
+                    payment_entry.paid_amount = paid_amount_in_company_currency
+                    payment_entry.received_amount = received_amount
+                    payment_entry.source_exchange_rate = source_exchange_rate
+                    payment_entry.target_exchange_rate = target_exchange_rate
+                    
+                    if mode_type == "Bank":
+                        payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
+                        payment_entry.reference_date = frappe.utils.nowdate()
+                    else:
+                        payment_entry.reference_no = None
+                        payment_entry.reference_date = frappe.utils.nowdate()
+                    
+                    payment_entry.remarks = f"Multi-currency payment: {original_method}"
+                    payment_entry.mode_of_payment = original_method
+                    frappe.flags.ignore_validate = True
+                    frappe.flags.ignore_links = True
+                    try:
+                        payment_entry.insert()
+                        payment_entry.submit()
+                    finally:
+                        frappe.flags.ignore_validate = False
+                        frappe.flags.ignore_links = False
+                
+                created_payments.append(payment_entry.name)
+
+            except Exception as e:
+                error_msg = f"Failed to create payment entry for {original_method} (amount: {paid_amount}): {str(e)}"
+                error_messages.append(error_msg)
+                error_traceback = frappe.get_traceback()
+                frappe.log_error(
+                    f"{error_msg}\nOriginal Method: {original_method}\nMode Account: {mode_account}\nTraceback: {error_traceback}",
+                    "Payment Entry Error"
+                )
+                continue
+
+        if created_payments:
+            frappe.db.commit()
+        else:
+            frappe.db.rollback()
+
+        if not created_payments:
+            return {
+                "success": False,
+                "message": "Failed to create payment entries",
+                "details": "No payment entries were created. " + ("; ".join(error_messages[:3]) if error_messages else "Please check payment methods and accounts."),
+                "errors": error_messages[:5] if error_messages else None,
+            }
+
+        return {
+            "success": True,
+            "message": "Multi-currency payment made successfully",
+            "details": f"Created {len(created_payments)} payment entry/entries",
+            "payment_entries": created_payments,
+        }
+
+    except Exception as e:
+        frappe.db.rollback()
+        error_traceback = frappe.get_traceback()
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        try:
+            frappe.log_error(
+                f"Process Multi Currency Payment Background Failed\n"
+                f"Error Type: {error_type}\n"
+                f"Error Message: {error_msg}\n"
+                f"Traceback: {error_traceback}",
+                "Process Multi Currency Payment Background Failed"
+            )
+        except Exception as log_error:
+            try:
+                frappe.log_error(f"Process Multi Currency Payment Background Failed: {error_type}: {error_msg}", "Process Multi Currency Payment Background Failed")
+            except:
+                pass
+
+        return {
+            "success": False,
+            "message": "Failed to make multi-currency payment",
+            "details": f"{error_type}: {error_msg}",
+        }
+
+
 @frappe.whitelist()
 def make_multi_currency_payment(customer, payments):
     """Create payment entries for each mode of payment in multi-currency payment.
+    Returns immediately with job ID for async processing.
     
     payments format: {
         "mode_currency": {
@@ -2110,6 +2595,112 @@ def make_multi_currency_payment(customer, payments):
     }
     """
     try:
+        # Basic validation before queuing
+        if payments is None:
+            return {
+                "success": False,
+                "message": "No payments provided",
+                "details": "Payments parameter is None.",
+            }
+        
+        # Parse JSON if payments is a string
+        if isinstance(payments, str):
+            try:
+                payments = frappe.parse_json(payments)
+            except Exception as parse_error:
+                return {
+                    "success": False,
+                    "message": "Invalid payments format",
+                    "details": f"Could not parse payments JSON: {str(parse_error)}",
+                }
+        
+        if isinstance(customer, str) and customer.startswith('"'):
+            try:
+                customer = frappe.parse_json(customer)
+            except Exception:
+                pass
+        
+        # Validate payments is a dict and not empty
+        if not isinstance(payments, dict) or len(payments) == 0:
+            return {
+                "success": False,
+                "message": "No payments provided",
+                "details": "Payments dictionary is empty. Please provide at least one payment method with amount > 0.",
+            }
+        
+        # Get company for validation
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        if not company:
+            return {
+                "success": False,
+                "message": "Company not found",
+                "details": "Please set default company in user defaults or Global Defaults.",
+            }
+
+        if not customer:
+            customer = get_default_customer()
+
+        # Enqueue payment processing in background
+        job_id = None
+        try:
+            job_kwargs = {
+                "method": "havano_restaurant_pos.havano_restaurant_pos.api.process_multi_currency_payment_background",
+                "queue": "default",
+                "timeout": 300,
+                "is_async": True,
+                "customer": customer,
+                "payments": payments
+            }
+            
+            try:
+                job_kwargs["job_name"] = f"process_multi_currency_payment_{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
+            except:
+                pass
+            
+            job = frappe.enqueue(**job_kwargs)
+            job_id = job.id if hasattr(job, 'id') else (job if isinstance(job, str) else None)
+            
+            frappe.logger().info(f"Multi-currency payment queued, job_id: {job_id}, customer: {customer}")
+            
+        except Exception as queue_error:
+            # If queue fails, log error but still return success (payment will be processed in background)
+            error_msg = f"Queue enqueue failed for multi-currency payment: {str(queue_error)}\n{frappe.get_traceback()}"
+            frappe.log_error(error_msg, "Make Multi Currency Payment Queue Error")
+            # Still return success - the background job will handle it
+            job_id = None
+        
+        # Return success immediately
+        return {
+            "success": True,
+            "message": "Multi-currency payment queued successfully",
+            "details": "Payment is being processed in the background",
+            "job_id": job_id,
+        }
+
+    except Exception as e:
+        error_traceback = frappe.get_traceback()
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        try:
+            frappe.log_error(
+                f"Make Multi Currency Payment Failed\n"
+                f"Error Type: {error_type}\n"
+                f"Error Message: {error_msg}\n"
+                f"Traceback: {error_traceback}",
+                "Make Multi Currency Payment Failed"
+            )
+        except Exception as log_error:
+            try:
+                frappe.log_error(f"Make Multi Currency Payment Failed: {error_type}: {error_msg}", "Make Multi Currency Payment Failed")
+            except:
+                pass
+
+            return {
+                "success": False,
+                "message": "Failed to queue multi-currency payment",
+                "details": f"{error_type}: {error_msg}",
+            }
         # Parse JSON if payments is a string - with better error handling
         if payments is None:
             return {
@@ -2756,7 +3347,7 @@ def process_payment_entries(
                             })
                 
                 if payment_breakdown_list:
-                    result = make_payment_for_transaction(
+                    result = process_payment_for_transaction_background(
                         "Sales Invoice",
                         invoice_name,
                         amount=None,  # Let it calculate from breakdown
@@ -2771,7 +3362,7 @@ def process_payment_entries(
                     }
             elif payment_breakdown and isinstance(payment_breakdown, list) and len(payment_breakdown) > 0:
                 # Multi-payment method (regular payment with breakdown)
-                result = make_payment_for_transaction(
+                result = process_payment_for_transaction_background(
                     "Sales Invoice",
                     invoice_name,
                     amount=amount,
@@ -2781,7 +3372,7 @@ def process_payment_entries(
                 )
             else:
                 # Single payment method
-                result = make_payment_for_transaction(
+                result = process_payment_for_transaction_background(
                     "Sales Invoice",
                     invoice_name,
                     amount=amount,

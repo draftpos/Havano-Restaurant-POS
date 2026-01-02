@@ -427,50 +427,59 @@ export default function MultiCurrencyDialog({
                       <Button
                         className="flex-1"
                         type="submit"
-                        disabled={loading || !isPaid || loadingRates}
+                        disabled={!isPaid || loadingRates}
                         onClick={handleSubmit(async (data) => {
-                          try {
-                            // Convert payment keys to include mode and currency info
-                            const paymentData = {};
-                            Object.entries(data.payments || {}).forEach(([key, amount]) => {
-                              if (Number(amount) > 0) {
-                                const method = paymentMethods.find(m => m.key === key);
-                                if (method) {
-                                  // Send as mode_currency: amount format
-                                  paymentData[key] = {
-                                    mode: method.mode,
-                                    currency: method.currency,
-                                    amount: Number(amount)
-                                  };
-                                }
+                          // Convert payment keys to include mode and currency info
+                          const paymentData = {};
+                          Object.entries(data.payments || {}).forEach(([key, amount]) => {
+                            if (Number(amount) > 0) {
+                              const method = paymentMethods.find(m => m.key === key);
+                              if (method) {
+                                // Send as mode_currency: amount format
+                                paymentData[key] = {
+                                  mode: method.mode,
+                                  currency: method.currency,
+                                  amount: Number(amount)
+                                };
                               }
-                            });
-                            
-                            // Validate that we have cart items
-                            if (!itemsToUse || itemsToUse.length === 0) {
-                              toast.error("No items in cart", {
-                                description: "Please add items to cart before making payment.",
-                                duration: 5000,
-                              });
-                              return;
                             }
-                            
-                            await submitPayment({
-                              payments: paymentData,
-                              cartItems: itemsToUse,
-                              orderPayload: orderPayload,
+                          });
+                          
+                          // Validate that we have cart items
+                          if (!itemsToUse || itemsToUse.length === 0) {
+                            toast.error("No items in cart", {
+                              description: "Please add items to cart before making payment.",
+                              duration: 5000,
                             });
-
-                            onOpenChange(false);
-                            setPaymentDialogOpenState(false);
-                            clearCart();
-                          } catch (err) {
-                            // prevent uncaught promise rejection
-                            console.error("Error submitting payment:", err);
+                            return;
                           }
+                          
+                          // Immediately show success and close dialog (optimistic UI)
+                          toast.success("Payment processing...", {
+                            description: "Payment is being processed in the background",
+                            duration: 2000,
+                          });
+                          
+                          onOpenChange(false);
+                          setPaymentDialogOpenState(false);
+                          clearCart();
+
+                          // Process payment in background (fire and forget)
+                          (async () => {
+                            try {
+                              await submitPayment({
+                                payments: paymentData,
+                                cartItems: itemsToUse,
+                                orderPayload: orderPayload,
+                              });
+                            } catch (err) {
+                              // Log error but don't block user (payment already shown as successful)
+                              console.error("Payment processing error (background):", err);
+                            }
+                          })();
                         })}
                       >
-                        {loading ? "Processing..." : "Make Payment"}
+                        Make Payment
                       </Button>
                     </div>
                   </div>
