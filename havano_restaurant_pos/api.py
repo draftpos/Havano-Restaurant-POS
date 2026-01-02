@@ -531,9 +531,24 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
                 mode_account = mode_accounts[0].default_account
 
         # Get mode of payment type to check if it's Bank (requires reference_no and reference_date)
+        # Check mode type more reliably
         mode_type = None
         if payment_method:
-            mode_type = frappe.get_cached_value("Mode of Payment", payment_method, "type")
+            try:
+                mode_type = frappe.get_cached_value("Mode of Payment", payment_method, "type")
+            except Exception:
+                try:
+                    mode_doc = frappe.get_doc("Mode of Payment", payment_method)
+                    mode_type = mode_doc.type if hasattr(mode_doc, 'type') else None
+                except Exception:
+                    mode_type = None
+        
+        # Also check if the account type is Bank
+        account_type = None
+        try:
+            account_type = frappe.get_cached_value("Account", mode_account, "account_type")
+        except Exception:
+            pass
 
         # Get account currencies in one query (optimized)
         account_currencies = frappe.get_all(
@@ -586,7 +601,11 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             payment_entry.target_exchange_rate = target_exchange_rate
             
             # For Bank transactions, reference_no and reference_date are mandatory
-            if mode_type == "Bank":
+            # Check both mode_type and account_type to be safe
+            is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+            
+            if is_bank_transaction:
+                # Always set reference_no and reference_date for Bank transactions
                 payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                 payment_entry.reference_date = frappe.utils.nowdate()
             else:
@@ -1502,9 +1521,26 @@ def process_payment_for_transaction_background(
             mode_account_currency = frappe.get_cached_value("Account", mode_account, "account_currency") or company_currency
             
             # Get mode of payment type to check if it's Bank (requires reference_no and reference_date)
+            # Check mode type more reliably - try to get it even if mode_exists check failed
             mode_type = None
-            if original_method and mode_exists:
-                mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+            if original_method:
+                try:
+                    # Try to get mode type directly from database
+                    mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+                except Exception:
+                    # If cached value fails, try direct query
+                    try:
+                        mode_doc = frappe.get_doc("Mode of Payment", original_method)
+                        mode_type = mode_doc.type if hasattr(mode_doc, 'type') else None
+                    except Exception:
+                        mode_type = None
+            
+            # Also check if the account type is Bank
+            account_type = None
+            try:
+                account_type = frappe.get_cached_value("Account", mode_account, "account_type")
+            except Exception:
+                pass
 
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
@@ -1540,7 +1576,11 @@ def process_payment_for_transaction_background(
                 payment_entry.target_exchange_rate = target_exchange_rate
                 
                 # For Bank transactions, reference_no and reference_date are mandatory
-                if mode_type == "Bank":
+                # Check both mode_type and account_type to be safe
+                is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                
+                if is_bank_transaction:
+                    # Always set reference_no and reference_date for Bank transactions
                     payment_entry.reference_no = docname or f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                     payment_entry.reference_date = frappe.utils.nowdate()
                 else:
@@ -1609,7 +1649,11 @@ def process_payment_for_transaction_background(
                     payment_entry.target_exchange_rate = target_exchange_rate
                     
                     # For Bank transactions, reference_no and reference_date are mandatory
-                    if mode_type == "Bank":
+                    # Check both mode_type and account_type to be safe
+                    is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                    
+                    if is_bank_transaction:
+                        # Always set reference_no and reference_date for Bank transactions
                         payment_entry.reference_no = docname or f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                         payment_entry.reference_date = frappe.utils.nowdate()
                     else:
@@ -2418,9 +2462,27 @@ def process_multi_currency_payment_background(customer, payments):
 
             mode_account_currency = frappe.get_cached_value("Account", mode_account, "account_currency") or company_currency
             
+            # Get mode of payment type to check if it's Bank (requires reference_no and reference_date)
+            # Check mode type more reliably - try to get it even if mode_exists check failed
             mode_type = None
-            if original_method and mode_exists:
-                mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+            if original_method:
+                try:
+                    # Try to get mode type directly from database
+                    mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+                except Exception:
+                    # If cached value fails, try direct query
+                    try:
+                        mode_doc = frappe.get_doc("Mode of Payment", original_method)
+                        mode_type = mode_doc.type if hasattr(mode_doc, 'type') else None
+                    except Exception:
+                        mode_type = None
+            
+            # Also check if the account type is Bank
+            account_type = None
+            try:
+                account_type = frappe.get_cached_value("Account", mode_account, "account_type")
+            except Exception:
+                pass
             
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
@@ -2455,7 +2517,12 @@ def process_multi_currency_payment_background(customer, payments):
                 payment_entry.source_exchange_rate = source_exchange_rate
                 payment_entry.target_exchange_rate = target_exchange_rate
                 
-                if mode_type == "Bank":
+                # For Bank transactions, reference_no and reference_date are mandatory
+                # Check both mode_type and account_type to be safe
+                is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                
+                if is_bank_transaction:
+                    # Always set reference_no and reference_date for Bank transactions
                     payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                     payment_entry.reference_date = frappe.utils.nowdate()
                 else:
@@ -2504,7 +2571,12 @@ def process_multi_currency_payment_background(customer, payments):
                     payment_entry.source_exchange_rate = source_exchange_rate
                     payment_entry.target_exchange_rate = target_exchange_rate
                     
-                    if mode_type == "Bank":
+                    # For Bank transactions, reference_no and reference_date are mandatory
+                    # Check both mode_type and account_type to be safe
+                    is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                    
+                    if is_bank_transaction:
+                        # Always set reference_no and reference_date for Bank transactions
                         payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                         payment_entry.reference_date = frappe.utils.nowdate()
                     else:
@@ -2951,9 +3023,26 @@ def make_multi_currency_payment(customer, payments):
             mode_account_currency = frappe.get_cached_value("Account", mode_account, "account_currency") or company_currency
             
             # Get mode of payment type to check if it's Bank (requires reference_no and reference_date)
+            # Check mode type more reliably - try to get it even if mode_exists check failed
             mode_type = None
-            if original_method and mode_exists:
-                mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+            if original_method:
+                try:
+                    # Try to get mode type directly from database
+                    mode_type = frappe.get_cached_value("Mode of Payment", original_method, "type")
+                except Exception:
+                    # If cached value fails, try direct query
+                    try:
+                        mode_doc = frappe.get_doc("Mode of Payment", original_method)
+                        mode_type = mode_doc.type if hasattr(mode_doc, 'type') else None
+                    except Exception:
+                        mode_type = None
+            
+            # Also check if the account type is Bank
+            account_type = None
+            try:
+                account_type = frappe.get_cached_value("Account", mode_account, "account_type")
+            except Exception:
+                pass
             
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
@@ -3000,7 +3089,11 @@ def make_multi_currency_payment(customer, payments):
                 payment_entry.target_exchange_rate = target_exchange_rate
                 
                 # For Bank transactions, reference_no and reference_date are mandatory
-                if mode_type == "Bank":
+                # Check both mode_type and account_type to be safe
+                is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                
+                if is_bank_transaction:
+                    # Always set reference_no and reference_date for Bank transactions
                     payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                     payment_entry.reference_date = frappe.utils.nowdate()
                 else:
@@ -3057,7 +3150,11 @@ def make_multi_currency_payment(customer, payments):
                     payment_entry.target_exchange_rate = target_exchange_rate
                     
                     # For Bank transactions, reference_no and reference_date are mandatory
-                    if mode_type == "Bank":
+                    # Check both mode_type and account_type to be safe
+                    is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                    
+                    if is_bank_transaction:
+                        # Always set reference_no and reference_date for Bank transactions
                         payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
                         payment_entry.reference_date = frappe.utils.nowdate()
                     else:
