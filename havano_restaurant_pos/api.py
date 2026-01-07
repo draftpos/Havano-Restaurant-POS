@@ -1995,7 +1995,7 @@ def get_invoice_json(invoice_name):
             "VATNo": getattr(company, "vat", None) or "",
             "Tel": getattr(company, "phone_no", None) or getattr(company, "phone", None) or "",
             "InvoiceNo": invoice.name,
-            "InvoiceDate": str(invoice.creation),
+            "InvoiceDate": invoice.creation.strftime("%Y-%m-%d"),
             "CashierName": invoice.owner,
             "CustomerName": invoice.customer_name,
             "CustomerContact": invoice.contact_display or invoice.customer_name,
