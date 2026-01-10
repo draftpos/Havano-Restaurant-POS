@@ -178,14 +178,14 @@ const Home = () => {
                           onClick={() => handlePopularItemClick(item)}
                           className="w-full flex items-center justify-between bg-secondary-background rounded-md py-2 px-4 transition hover:bg-secondary-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:cursor-pointer"
                         >
-                          <div className="flex items-center gap-4">
-                            <div className="p-2 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="p-2 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
                               <p className="text-lg font-bold text-white">
                                 {index + 1}
                               </p>
                             </div>
-                            <div className="text-left">
-                              <p className="font-medium">{item.item_name}</p>
+                            <div className="text-left flex-1 min-w-0">
+                              <p className="font-medium break-words whitespace-normal">{item.item_name}</p>
                               <p className="text-xs text-gray-500">
                                 Orders: {item.orderCount ?? 0}
                               </p>

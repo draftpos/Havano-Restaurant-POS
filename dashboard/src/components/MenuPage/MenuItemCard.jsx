@@ -41,8 +41,8 @@ const MenuItemCard = ({ item, index }) => {
           isActive && "border-primary bg-primary/10"
         )}
       >
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle className="truncate max-w-[140px]">
+        <CardHeader className="flex items-start justify-between min-h-[60px]">
+          <CardTitle className="break-words whitespace-normal text-sm leading-tight">
             {item.item_name}
           </CardTitle>
         </CardHeader>
