@@ -37,11 +37,11 @@ const MenuItemCard = ({ item, index }) => {
           handleAddToCart();
         }}
         className={cn(
-          "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50",
+          "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50 py-2 gap-2",
           isActive && "border-primary bg-primary/10"
         )}
       >
-        <CardHeader className="flex items-start justify-between min-h-[60px]">
+        <CardHeader className="flex items-start justify-between px-3 py-1">
           <CardTitle className="break-words whitespace-normal text-sm leading-tight">
             {item.item_name}
           </CardTitle>
