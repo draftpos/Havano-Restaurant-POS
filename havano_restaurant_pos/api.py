@@ -2012,7 +2012,7 @@ def get_invoice_json(invoice_name):
             "MultiCurrencyDetails": [
                 {"Key": invoice.currency, "Value": flt(invoice.grand_total)}
             ],
-            "DeviceID": getattr(invoice, "custom_device_id_id", "None"),
+            "DeviceID": getattr(invoice, "custom_device_id", ""),
             "DeviceSerial": getattr(invoice, "custom_device_serial_no", ""),
             "FiscalDay":  getattr(invoice, "custom_fiscal_day", ""),
             "ReceiptNo": getattr(invoice, "custom_receiptno", ""),
