@@ -447,6 +447,7 @@ def mark_table_as_paid(table):
 
 @frappe.whitelist()
 def create_order_and_payment(payload, amount=None, payment_method=None, note=None):
+    print("creating sales invoice on anotherfuncion 222222222222222--------------------------")
     """Create order, create sales invoice and create a payment entry in one call.
     Optimized for performance with batched commits and cached lookups.
 
@@ -3295,6 +3296,8 @@ def make_multi_currency_payment(customer, payments):
 
 @frappe.whitelist()
 def create_invoice_and_payment_queue(payload=None, **kwargs):
+
+    print(" this is the sales invoice we are creating-=---------------1111-------------------------")
     """Create sales invoice and payment entries in background queue.
     Returns immediately with job ID for async processing.
     

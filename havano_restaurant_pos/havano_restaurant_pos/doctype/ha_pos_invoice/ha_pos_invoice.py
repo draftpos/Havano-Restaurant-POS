@@ -8,54 +8,79 @@ import json
 class HaPosInvoice(Document):
    pass
 
+
+
+def get_pos_user_defaults():
+    user = frappe.session.user
+
+    settings = frappe.get_single("HA POS Settings")
+
+    for row in settings.user_mapping:
+        if row.user == user:
+            return {
+                "cost_center": row.cost_center,
+                "price_list": row.price_list,
+            }
+
+    return None
 @frappe.whitelist()
 def create_sales_invoice(customer, items, price_list=None):
     """Create a new sales invoice"""
     import json
-    
-    # Debug prints
-    print("SAVING INVOICE --------------------------")
-    print("Price List:", price_list)
-    print("Customer:", customer)
-    print("Items:", items)
-    
-    # Parse items if it's a JSON string (might come as string from JS)
-    if isinstance(items, str):
-        items = json.loads(items)
-    
-    # Create a new sales invoice
-    invoice = frappe.get_doc({
-        "doctype": "Sales Invoice",
-        "customer": customer,
-        "price_list": price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list"),
-        "items": []
-    })
-    
-    # Add items to the invoice
-    for item_data in items:
-        invoice.append("items", {
-            "item_code": item_data.get("item_code"),
-            "qty": item_data.get("qty"),
-            "rate": item_data.get("rate")
+    import frappe
+
+    try:
+        print("SAVING INVOICE --------------------------")
+        print("Price List:", price_list)
+        print("Customer:", customer)
+        print("Items:", items)
+
+        defaults = get_pos_user_defaults()
+        if not defaults:
+            frappe.throw("Logged-in user is not mapped in HA POS Settings")
+
+        print("Cost center:", defaults.get("cost_center"))
+
+        # Parse items if it's a JSON string (might come as string from JS)
+        if isinstance(items, str):
+            items = json.loads(items)
+
+        invoice = frappe.get_doc({
+            "doctype": "Sales Invoice",
+            "customer": customer,
+            "cost_center": defaults.get("cost_center"),
+            "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value("Selling Settings", "selling_price_list"),
+            "items": []
         })
-    
-    # Insert and submit the invoice
-    invoice.insert()
-    invoice.submit()
 
+        # Add items
+        for item_data in items:
+            invoice.append("items", {
+                "item_code": item_data.get("item_code"),
+                "qty": item_data.get("qty"),
+                "rate": item_data.get("rate"),
+                "cost_center": defaults.get("cost_center"),
+            })
 
-    # payment_summary = frappe.new_doc("Ha Pos Payment Summary")
-    # payment_summary.customer = customer
-    # payment_summary.sales_invoice_link = invoice
-    # payment_summary.payment_method = "1100 - Cash In Hand - ESH"
-    # payment_summary.account = "1100 - Cash In Hand - ESH"
-    # payment_summary.amount = 400.3 
-    # payment_summary.user = user
+        invoice.insert(ignore_permissions=True)
+        invoice.submit()
 
-    # payment_summary.insert()
-        
-    return {
-        "name": invoice.name,
-        "total": invoice.grand_total,
-        "posting_date": invoice.posting_date
-    }
+        return {
+            "success": True,
+            "name": invoice.name,
+            "total": invoice.grand_total,
+            "posting_date": invoice.posting_date
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Create Sales Invoice Error")
+        frappe.msgprint(
+            title="Invoice Creation Failed",
+            msg=str(e),
+            indicator="red"
+        )
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
