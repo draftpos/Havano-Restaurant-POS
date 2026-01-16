@@ -3900,7 +3900,7 @@ def close_shift():
 
     # get latest open shift
     shift = frappe.get_all(
-        "HA POS Shift",
+        "HA Shift POS",
         filters={"user": user, "status": "Open"},
         order_by="shift_start desc",
         limit_page_length=1,
@@ -3910,7 +3910,7 @@ def close_shift():
     if not shift:
         return {"status": "no_open_shift", "message": "You have no open shift to close."}
 
-    shift_doc = frappe.get_doc("HA POS Shift", shift[0].name)
+    shift_doc = frappe.get_doc("HA Shift POS", shift[0].name)
     shift_doc.status = "Close"
     shift_doc.shift_end = now_datetime()  # optional: track end time
     shift_doc.save(ignore_permissions=True)
