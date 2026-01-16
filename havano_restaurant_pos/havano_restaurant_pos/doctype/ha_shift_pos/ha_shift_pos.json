@@ -63,7 +63,7 @@
  "modified": "2026-01-16 15:13:37.339824",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
- "name": "HA POS Shift",
+ "name": "HA Shift POS",
  "naming_rule": "Autoincrement",
  "owner": "Administrator",
  "permissions": [

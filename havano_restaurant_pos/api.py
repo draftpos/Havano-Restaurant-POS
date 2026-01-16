@@ -3829,7 +3829,7 @@ def get_user_shift_status():
 
     # get latest open shift for user
     shift = frappe.get_all(
-        "HA POS Shift",
+        "HA Shift POS",
         filters={"user": user, "status": "Open"},
         order_by="shift_start desc",
         limit_page_length=1,
@@ -3867,7 +3867,7 @@ def open_shift():
         frappe.throw(_("Guest users cannot open shifts"))
 
     existing_shift = frappe.get_all(
-        "HA POS Shift",
+        "HA Shift POS",
         filters={"user": user, "status": "Open"},
         limit=1
     )
@@ -3876,7 +3876,7 @@ def open_shift():
         return {"status": "already_open", "message": "You already have an open shift."}
 
     shift_doc = frappe.get_doc({
-        "doctype": "HA POS Shift",
+        "doctype": "HA Shift POS",
         "user": user,
         "status": "Open",
         "shift_start": now_datetime(),  # ✅ set current date & time
