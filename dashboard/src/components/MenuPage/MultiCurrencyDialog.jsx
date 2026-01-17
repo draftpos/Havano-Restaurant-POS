@@ -112,7 +112,7 @@ export default function MultiCurrencyDialog({
         });
         rates[cashKey] = 1.0;
         addedKeys.add(cashKey);
-        
+  
         // Process each selected payment method
         selectedMethods.forEach((method) => {
           if (method.mode_of_payment && method.currency && method.exchange_rate) {
@@ -137,7 +137,6 @@ export default function MultiCurrencyDialog({
             }
           }
         });
-
         // If no other payment methods found, add default exchange rates
         if (methodsList.length === 1 && defaultExchangeRates && Object.keys(defaultExchangeRates).length > 0) {
           Object.keys(defaultExchangeRates).forEach(currency => {
@@ -226,7 +225,9 @@ export default function MultiCurrencyDialog({
     // Exchange rate is FROM payment currency TO company currency
     // So to convert payment amount to base currency: multiply by rate
     // Example: 100 EUR * 1.1 (EUR to USD rate) = 110 USD
-    return amount * ratesAtOpen[key];
+    console.log(`Converting ${amount} ${key} to base using rate ${ratesAtOpen[key]}`);
+    console.log("the real zwg"+amount *ratesAtOpen[key])
+    return amount / ratesAtOpen[key];
   };
 
   const totalPaidInBase = paymentMethods.reduce((sum, method) => {
@@ -243,7 +244,8 @@ export default function MultiCurrencyDialog({
     // Exchange rate is FROM payment currency TO company currency
     // So to convert base currency to payment currency: divide by rate
     // Example: 100 USD / 1.1 (EUR to USD rate) = 90.91 EUR
-    return remainingBase / ratesAtOpen[key];
+    console.log("the remaining base: "+remainingBase+"rate at open: "+ratesAtOpen)
+    return remainingBase * ratesAtOpen[key];
   };
   return (
     <>
@@ -391,7 +393,7 @@ export default function MultiCurrencyDialog({
                                 </TableCell>
 
                                 <TableCell>
-                                  {getBaseValue(paid, method.key).toFixed(4)}
+                                {getBaseValue(paid, method.key).toFixed(4)}
                                 </TableCell>
                               </TableRow>
                             );
