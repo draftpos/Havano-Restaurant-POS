@@ -55,6 +55,17 @@ const MenuPage = () => {
                       ? "cursor-not-allowed opacity-50"
                       : "cursor-pointer"
                   }`}
+                  onClick={(e) => {
+                    if (!isRestMode) {
+                      console.info(
+                        "[HA POS] Dine In clicked, but Restaurant Mode is disabled in HA POS Settings."
+                      );
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    handleDineInClick();
+                  }}
                 >
                   <input
                     type="radio"
@@ -62,7 +73,7 @@ const MenuPage = () => {
                     value="dine-in"
                     checked={isDineInSelected}
                     className="peer sr-only"
-                    disabled={!isRestMode}
+                    // keep enabled so we can surface a console message on click
                     onChange={() => {}}
                     onClick={(e) => {
                       e.preventDefault();
