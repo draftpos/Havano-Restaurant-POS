@@ -78,21 +78,23 @@ function useMultiCurrencyPayment() {
 
 			setSuccess(true);
 			try {
-				const invoiceJson = await get_invoice_json(res.sales_invoice);
-				// Convert JSON to string
-				const jsonStr = JSON.stringify(invoiceJson, null, 2);
-				// Create a blob and download (optimized: async download)
-				const blob = new Blob([jsonStr], { type: "text/plain" });
-				const link = document.createElement("a");
-				link.href = URL.createObjectURL(blob);
-				link.download = `${res.sales_invoice}.txt`;
-				document.body.appendChild(link);
-				link.click();
-				// Cleanup asynchronously (non-blocking)
-				setTimeout(() => {
-					document.body.removeChild(link);
-					URL.revokeObjectURL(link.href);
-				}, 0);
+				console.log("Fetching invoice JSON for multiple:", res.sales_invoice);
+				window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+				// const invoiceJson = await get_invoice_json(res.sales_invoice);
+				// // Convert JSON to string
+				// const jsonStr = JSON.stringify(invoiceJson, null, 2);
+				// // Create a blob and download (optimized: async download)
+				// const blob = new Blob([jsonStr], { type: "text/plain" });
+				// const link = document.createElement("a");
+				// link.href = URL.createObjectURL(blob);
+				// link.download = `${res.sales_invoice}.txt`;
+				// document.body.appendChild(link);
+				// link.click();
+				// // Cleanup asynchronously (non-blocking)
+				// setTimeout(() => {
+				// 	document.body.removeChild(link);
+				// 	URL.revokeObjectURL(link.href);
+				// }, 0);
 			} catch (error) {
 			console.error("Error fetching invoice JSON:", error);
 			// Continue with payment even if JSON fetch fails

@@ -185,19 +185,20 @@ export default function PaymentDialog({
         if (isExistingTransaction && transactionDoctype && transactionName) {
           // Only fetch invoice JSON if needed (optimized: conditional)
           try {
-            const invoiceJson = await get_invoice_json(transactionName);
-            console.log("Invoice JSON returned from backend:", invoiceJson);
+            // const invoiceJson = await get_invoice_json(transactionName);
+            console.log("Invoice JSON returned from backend MULTIPLE");
+            window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${transactionName}`, "_blank");
 
             // Convert JSON to string
             const jsonStr = JSON.stringify(invoiceJson, null, 2);
 
             // Create a blob and download (optimized: async download)
-            const blob = new Blob([jsonStr], { type: "text/plain" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `${transactionName}.txt`;
-            document.body.appendChild(link);
-            link.click();
+            // const blob = new Blob([jsonStr], { type: "text/plain" });
+            // const link = document.createElement("a");
+            // link.href = URL.createObjectURL(blob);
+            // link.download = `${transactionName}.txt`;
+            // document.body.appendChild(link);
+            // link.click();
             // Cleanup asynchronously (non-blocking)
             setTimeout(() => {
               document.body.removeChild(link);
@@ -247,22 +248,24 @@ export default function PaymentDialog({
           console.log("direct-----------------DD--------", res.sales_invoice)
           try {
                   console.log("Payment successful bro:", res.sales_invoice);
-                  const invoiceJson = await get_invoice_json(res.sales_invoice);
-                  console.log("Invoice JSON returned from backend:", invoiceJson);
+                  // const invoiceJson = await get_invoice_json(res.sales_invoice);
+                  // console.log("Invoice JSON returned from backend:", invoiceJson);
+                  window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+                  
                   // Convert JSON to string
-                  const jsonStr = JSON.stringify(invoiceJson, null, 2);
-                  // Create a blob and download (optimized: async download)
-                  const blob = new Blob([jsonStr], { type: "text/plain" });
-                  const link = document.createElement("a");
-                  link.href = URL.createObjectURL(blob);
-                  link.download = `${res.sales_invoice}.txt`;
-                  document.body.appendChild(link);
-                  link.click();
-                  // Cleanup asynchronously (non-blocking)
-                  setTimeout(() => {
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(link.href);
-                  }, 0);
+                  // const jsonStr = JSON.stringify(invoiceJson, null, 2);
+                  // // Create a blob and download (optimized: async download)
+                  // const blob = new Blob([jsonStr], { type: "text/plain" });
+                  // const link = document.createElement("a");
+                  // link.href = URL.createObjectURL(blob);
+                  // link.download = `${res.sales_invoice}.txt`;
+                  // document.body.appendChild(link);
+                  // link.click();
+                  // // Cleanup asynchronously (non-blocking)
+                  // setTimeout(() => {
+                  //   document.body.removeChild(link);
+                  //   URL.revokeObjectURL(link.href);
+                  // }, 0);
               } 
           catch (error) {
                 console.error("Error fetching invoice JSON:", error);
