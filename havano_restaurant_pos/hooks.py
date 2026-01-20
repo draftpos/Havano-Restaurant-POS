@@ -252,6 +252,24 @@ doc_events = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+# fixtures = [
+#     {
+#         "dt": "Custom Field",
+#         "filters": [
+#             ["name", "in", [
+#                 "Quotation-custom_ordered"
+#             ]]
+#         ]
+#     },
+#     {
+#         "dt": "Client Script",
+#         "filters": [
+#             ["module", "=", "Havano Restaurant Pos"]
+#         ]
+#     }
+# ]
+
+
 fixtures = [
     {
         "dt": "Custom Field",
@@ -264,7 +282,7 @@ fixtures = [
     {
         "dt": "Client Script",
         "filters": [
-            ["module", "=", "Havano Restaurant Pos"]
+            ["name", "in", ["print invoice"]]
         ]
     }
 ]
