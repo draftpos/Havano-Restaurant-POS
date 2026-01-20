@@ -1337,7 +1337,7 @@ def process_payment_for_transaction_background(
                 doctype = "Sales Invoice"
                 docname = doc.name
             else:
-                return {
+                return { 
                     "success": False,
                     "message": "Quotation must be converted to Sales Invoice before payment. Please use the Edit button to convert it first.",
                 }
@@ -1903,6 +1903,13 @@ def make_payment_for_transaction(
             "details": f"{error_type}: {error_msg}",
         }
 
+@frappe.whitelist()
+def is_kitchen_item(item_name):
+    # Get the value of custom_order_item for this item
+    custom_flag = frappe.db.get_value("Item", item_name, "custom_order_item")
+    
+    # Return True if it's checked, else False
+    return bool(custom_flag)
 
 @frappe.whitelist()
 def get_invoice_json(invoice_name):
@@ -1973,7 +1980,7 @@ def get_invoice_json(invoice_name):
                     "productid": item.item_code,
                     "Qty": flt(item.qty),
                     "Price": flt(item.rate),
-                    "IsKitchenItem": bool(item.custom_is_kitchen_item),
+                    "IsKitchenItem": is_kitchen_item(item.item_code),
                     "Amount": flt(item.amount),
                     "tax_type": item.tax_type if hasattr(item, "tax_type") else "VAT",
                     "tax_rate": (
