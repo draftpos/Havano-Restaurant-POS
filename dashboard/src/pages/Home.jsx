@@ -54,6 +54,7 @@ const Home = () => {
     const loadRestaurantMode = async () => {
       try {
         const enabled = await isRestaurantMode();
+        console.log("enabled", enabled);
         if (!cancelled) setRestModeEnabled(Boolean(enabled));
       } catch (err) {
         console.error("Failed to load Restaurant Mode:", err);
@@ -146,9 +147,13 @@ const Home = () => {
             <div className="flex items-center gap-4 py-8">
               <Button
                 size="lg"
-                disabled={!restModeEnabled}
                 onClick={() => {
-                  if (!restModeEnabled) return;
+                  if (!restModeEnabled) {
+                    console.info(
+                      "[HA POS] Dine In clicked, but Restaurant Mode is disabled in HA POS Settings."
+                    );
+                    return;
+                  }
                   navigate("/tables");
                 }}
                 title={
@@ -156,6 +161,7 @@ const Home = () => {
                     ? "Dine In"
                     : "Enable Restaurant Mode in HA POS Settings to use Dine In"
                 }
+                className={!restModeEnabled ? "opacity-50 cursor-not-allowed" : ""}
               >
                 DINE IN
               </Button>

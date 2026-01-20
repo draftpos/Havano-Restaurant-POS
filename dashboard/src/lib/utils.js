@@ -284,7 +284,17 @@ export async function isRestaurantMode() {
       "HA POS Settings",
       "restaurant_mode"
     );
-    return message || false;
+    // Frappe responses can vary by endpoint/version:
+    // - message: 0/1
+    // - message: "0"/"1"
+    // - message: { restaurant_mode: 0/1 }
+    if (message && typeof message === "object") {
+      return Boolean(message.restaurant_mode);
+    }
+    if (typeof message === "string") {
+      return Boolean(Number(message));
+    }
+    return Boolean(message);
   } catch (err) {
     console.error("Error fetching HA POS Settings.is_restaurant_mode:", err);
     return false;
