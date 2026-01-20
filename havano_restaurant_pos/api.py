@@ -1973,6 +1973,7 @@ def get_invoice_json(invoice_name):
                     "productid": item.item_code,
                     "Qty": flt(item.qty),
                     "Price": flt(item.rate),
+                    "IsKitchenItem": bool(item.custom_is_kitchen_item),
                     "Amount": flt(item.amount),
                     "tax_type": item.tax_type if hasattr(item, "tax_type") else "VAT",
                     "tax_rate": (

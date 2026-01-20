@@ -268,14 +268,13 @@ doc_events = {
 #         ]
 #     }
 # ]
-
-
 fixtures = [
     {
         "dt": "Custom Field",
         "filters": [
             ["name", "in", [
-                "Quotation-custom_ordered"
+                "Quotation-custom_ordered",
+                "Sales Invoice Item-custom_is_kitchen_item"
             ]]
         ]
     },
