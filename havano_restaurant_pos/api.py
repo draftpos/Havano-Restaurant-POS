@@ -488,7 +488,12 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
                 amount_val = float(payment.get("amount", 0))
                 
                 # Only create payment entry for non-credit methods
-                if not is_payment_method_credit(method):
+                try:
+                    if not is_payment_method_credit(method):
+                        non_credit_total += amount_val
+                except Exception as credit_check_error:
+                    # If credit check fails, treat as non-credit and include in payment entry
+                    frappe.log_error(f"Error checking credit status for {method}: {str(credit_check_error)}", "Credit Check Error")
                     non_credit_total += amount_val
             
             # Only create payment entry if there are non-credit payments
@@ -564,7 +569,14 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
             payment_method = payment_method or "Cash"
             
             # Only create payment entry if payment method is NOT credit
-            if not is_payment_method_credit(payment_method):
+            try:
+                is_credit = is_payment_method_credit(payment_method)
+            except Exception as credit_check_error:
+                # If credit check fails, log error but continue with normal flow (create payment entry)
+                frappe.log_error(f"Error checking credit status for {payment_method}: {str(credit_check_error)}", "Credit Check Error")
+                is_credit = False
+            
+            if not is_credit:
                 # Get company accounts
                 company_data = frappe.get_cached_value(
                     "Company",
@@ -974,7 +986,18 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
         try:
             # Create payment entry (only if payment method is NOT credit)
             payment_entry_name = None
-            if not is_payment_method_credit(payment_method):
+            # Ensure payment_method is set before checking credit status
+            if not payment_method:
+                payment_method = "Cash"
+            # Check if payment method is credit - skip payment entry creation if credit
+            try:
+                is_credit = is_payment_method_credit(payment_method)
+            except Exception as credit_check_error:
+                # If credit check fails, log error but continue with normal flow (create payment entry)
+                frappe.log_error(f"Error checking credit status for {payment_method}: {str(credit_check_error)}", "Credit Check Error")
+                is_credit = False
+            
+            if not is_credit:
                 payment_entry = frappe.new_doc("Payment Entry")
                 payment_entry.payment_type = "Receive"
                 payment_entry.party_type = "Customer"
@@ -2721,6 +2744,8 @@ def get_ha_pos_settings():
 
 def is_payment_method_credit(payment_method):
     """Check if a payment method has is_credit checked in HA POS Settings"""
+    if not payment_method:
+        return False
     try:
         settings = frappe.get_single("HA POS Settings")
         if settings.selected_payment_methods:
@@ -2730,6 +2755,7 @@ def is_payment_method_credit(payment_method):
         return False
     except Exception as e:
         frappe.log_error(f"Error checking payment method credit status: {str(e)}")
+        # Return False on error to ensure normal flow continues
         return False
 
 
