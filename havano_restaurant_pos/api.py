@@ -2479,7 +2479,7 @@ def download_invoice_json():
     # ... build data like you already do ...
     data = get_invoice_json(invoice_name)
 
-    frappe.local.response.filename = f"{invoice_name}.json"
+    frappe.local.response.filename = f"{invoice_name}.txt"
     frappe.local.response.filecontent = frappe.as_json(data)
     frappe.local.response.type = "download"
 

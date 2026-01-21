@@ -155,11 +155,11 @@ useEffect(() => {
       setShiftType(status);
 
       // show dialog only if user can open or continue shift
-      if (status === "open" || status === "continue") {
-        setShiftDialogOpen(true);
-      } else {
-        setShiftDialogOpen(false); // shift is recent, no need to force
-      }
+      // if (status === "open" || status === "continue") {
+      //   setShiftDialogOpen(true);
+      // } else {
+      //   setShiftDialogOpen(false); // shift is recent, no need to force
+      // }
 
     } catch (err) {
       console.error("Failed to fetch shift status:", err);
