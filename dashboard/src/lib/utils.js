@@ -230,6 +230,45 @@ export async function markTableAsPaid(table) {
   }
 }
 
+/**
+ * Process table payment - create invoice, payment entry, update orders
+ * @param {string} tableId - Table ID
+ * @param {Array} orderIds - Array of order IDs
+ * @param {number} total - Total amount
+ * @param {number} amount - Payment amount
+ * @param {string} paymentMethod - Payment method
+ * @param {string} note - Payment note
+ * @param {Array} paymentBreakdown - Payment breakdown array
+ */
+export async function processTablePayment(
+  tableId,
+  orderIds,
+  total,
+  amount = null,
+  paymentMethod = null,
+  note = null,
+  paymentBreakdown = null
+) {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.process_table_payment",
+        {
+          table: tableId,
+          order_ids: orderIds,
+          total: total,
+          amount: amount,
+          payment_method: paymentMethod,
+          note: note,
+          payment_breakdown: paymentBreakdown,
+        }
+      );
+      return message;
+    },
+    "Process table payment"
+  );
+}
+
 
 export async function callPost(method, data = {}) {
   try {

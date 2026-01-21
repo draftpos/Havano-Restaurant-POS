@@ -257,16 +257,24 @@ def create_order_from_cart(payload):
         order.customer_name = safe(payload.get("customer_name"))
         order.table = safe(payload.get("table"))
         order.waiter = safe(payload.get("waiter"))
-        order.payment_status = "Unpaid"
+        order.order_status = "Open"
 
         for item in payload.get("order_items", []):
+            # Get menu_item from various possible fields
+            menu_item = item.get("name") or item.get("item_code") or item.get("item_name") or item.get("menu_item")
+            qty = item.get("quantity") or item.get("qty") or 1
+            rate = item.get("price") or item.get("rate") or 0
+            
+            if not menu_item:
+                continue  # Skip items without menu_item
+            
             order.append(
                 "order_items",
                 {
-                    "menu_item": safe(item.get("name")),
-                    "qty": item.get("quantity"),
-                    "rate": item.get("price"),
-                    "amount": (item.get("price") or 0) * (item.get("quantity") or 0),
+                    "menu_item": safe(menu_item),
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": rate * qty,
                     "preparation_remark": safe(item.get("remark")),
                 },
             )
@@ -283,6 +291,7 @@ def create_order_from_cart(payload):
             table = frappe.get_doc("HA Table", table_name)
             table.assigned_waiter = safe(payload.get("waiter"))
             table.customer_name = safe(payload.get("customer_name"))
+            table.status = "Occupied"
             table.save(ignore_permissions=True)
             frappe.db.commit()
 
@@ -354,6 +363,209 @@ def get_number_of_orders(menu_item):
         return {
             "success": False,
             "message": "Failed to get number of orders",
+            "details": str(e),
+        }
+
+
+@frappe.whitelist()
+def process_table_payment(table, order_ids, total, amount=None, payment_method=None, note=None, payment_breakdown=None):
+    """Process payment for all orders in a table.
+    
+    Creates sales invoice, payment entry, updates HA Orders, submits orders, marks as closed.
+    
+    Args:
+        table: Table ID
+        order_ids: List of order IDs to process
+        total: Total amount
+        amount: Payment amount (optional, defaults to total)
+        payment_method: Payment method (optional)
+        note: Payment note (optional)
+        payment_breakdown: Payment breakdown array (optional)
+    """
+    try:
+        # Get customer from table or use default
+        table_doc = frappe.get_doc("HA Table", table)
+        customer = table_doc.customer_name or get_default_customer()
+        
+        if not customer:
+            return {
+                "success": False,
+                "message": "Customer is required. Please set a customer for the table or configure default customer.",
+            }
+        
+        # Get company
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        if not company:
+            return {
+                "success": False,
+                "message": "Company is required. Please set a default company.",
+            }
+        
+        # Get all orders and collect items
+        order_items = []
+        orders_to_update = []
+        
+        for order_id in order_ids:
+            if not frappe.db.exists("HA Order", order_id):
+                continue
+                
+            order_doc = frappe.get_doc("HA Order", order_id)
+            
+            # Only process unpaid orders (check if payment_entry exists or order_status is not Closed)
+            if order_doc.payment_entry or order_doc.order_status == "Closed":
+                continue
+            
+            # Collect items from this order
+            for order_item in order_doc.order_items:
+                order_items.append({
+                    "menu_item": order_item.menu_item,
+                    "qty": order_item.qty,
+                    "rate": order_item.rate,
+                    "amount": order_item.amount,
+                })
+            
+            orders_to_update.append(order_doc)
+        
+        if not order_items:
+            return {
+                "success": False,
+                "message": "No items found in orders to process.",
+            }
+        
+        # Merge items with same menu_item and rate
+        merged_items = []
+        for item in order_items:
+            found = False
+            for merged in merged_items:
+                if merged["menu_item"] == item["menu_item"] and merged["rate"] == item["rate"]:
+                    merged["qty"] = merged["qty"] + item["qty"]
+                    merged["amount"] = merged["qty"] * merged["rate"]
+                    found = True
+                    break
+            if not found:
+                merged_items.append(item.copy())
+        
+        # Create Sales Invoice
+        from havano_restaurant_pos.havano_restaurant_pos.doctype.ha_pos_invoice.ha_pos_invoice import (
+            create_sales_invoice,
+        )
+        
+        # Prepare items for sales invoice
+        invoice_items = []
+        for item in merged_items:
+            invoice_items.append({
+                "item_code": item["menu_item"],
+                "qty": item["qty"],
+                "rate": item["rate"],
+            })
+        
+        inv = create_sales_invoice(customer, invoice_items)
+        invoice_name = inv.get("name") if isinstance(inv, dict) else inv
+        
+        if not invoice_name:
+            return {
+                "success": False,
+                "message": "Failed to create sales invoice",
+            }
+        
+        # Create Payment Entry
+        paid_amount = float(amount) if amount is not None else float(total)
+        if paid_amount > total:
+            paid_amount = float(total)
+        
+        # Get company accounts
+        company_data = frappe.get_cached_value(
+            "Company",
+            company,
+            ["default_currency", "default_receivable_account", "default_cash_account"],
+            as_dict=True
+        )
+        
+        paid_from_account = company_data.get("default_receivable_account")
+        default_paid_to_account = company_data.get("default_cash_account") or paid_from_account
+        
+        # Handle payment method
+        if payment_method == "Multi":
+            payment_method = "Cash"
+        payment_method = payment_method or "Cash"
+        
+        # Get account from mode of payment
+        mode_account = default_paid_to_account
+        if payment_method and payment_method != "Cash":
+            mode_accounts = frappe.get_all(
+                "Mode of Payment Account",
+                filters={"parent": payment_method, "company": company},
+                fields=["default_account"],
+                limit=1
+            )
+            if mode_accounts and mode_accounts[0].default_account:
+                mode_account = mode_accounts[0].default_account
+        
+        # Create payment entry
+        payment_entry = frappe.new_doc("Payment Entry")
+        payment_entry.payment_type = "Receive"
+        payment_entry.party_type = "Customer"
+        payment_entry.party = customer
+        payment_entry.company = company
+        payment_entry.posting_date = frappe.utils.nowdate()
+        payment_entry.paid_from = paid_from_account
+        payment_entry.paid_to = mode_account
+        payment_entry.paid_amount = paid_amount
+        payment_entry.received_amount = paid_amount
+        payment_entry.source_exchange_rate = 1.0
+        payment_entry.target_exchange_rate = 1.0
+        payment_entry.remarks = note or "Table Payment"
+        payment_entry.mode_of_payment = payment_method
+        
+        # Add reference to sales invoice
+        payment_entry.append("references", {
+            "reference_doctype": "Sales Invoice",
+            "reference_name": invoice_name,
+            "allocated_amount": paid_amount,
+        })
+        
+        frappe.flags.ignore_validate = True
+        frappe.flags.ignore_links = True
+        try:
+            payment_entry.insert(ignore_permissions=True)
+            payment_entry.submit()
+        finally:
+            frappe.flags.ignore_validate = False
+            frappe.flags.ignore_links = False
+        
+        # Update HA Orders with invoice and payment, submit, and mark as closed
+        for order_doc in orders_to_update:
+            order_doc.sales_invoice = invoice_name
+            order_doc.payment_entry = payment_entry.name
+            order_doc.order_status = "Closed"
+            
+            # Submit order if not already submitted
+            if order_doc.docstatus == 0:
+                order_doc.submit()
+            else:
+                order_doc.save(ignore_permissions=True)
+        
+        # Update table status
+        table_doc.status = "Available"
+        table_doc.save(ignore_permissions=True)
+        
+        frappe.db.commit()
+        
+        return {
+            "success": True,
+            "message": "Table payment processed successfully",
+            "sales_invoice": invoice_name,
+            "payment_entry": payment_entry.name,
+            "order_ids": [order.name for order in orders_to_update],
+        }
+        
+    except Exception as e:
+        frappe.db.rollback()
+        error_msg = f"Error processing table payment: {str(e)}\n{frappe.get_traceback()}"
+        frappe.log_error(error_msg, "Process Table Payment Error")
+        return {
+            "success": False,
+            "message": "Failed to process table payment",
             "details": str(e),
         }
 
@@ -563,6 +775,88 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
         paid_from_currency = account_currency_map.get(paid_from_account, company_currency)
         paid_to_currency = account_currency_map.get(mode_account, company_currency)
         
+        # Check if this is a Dine In order - if so, skip invoice and payment, only create HA Order
+        order_type = payload.get("order_type")
+        
+        # For Dine In orders, only create HA Order, skip Sales Invoice and Payment Entry
+        if order_type == "Dine In":
+            try:
+                # Create HA Order only
+                def safe(value):
+                    if not value:
+                        return ""
+                    return str(value)[:140]
+
+                order = frappe.new_doc("HA Order")
+                order.order_type = safe(payload.get("order_type"))
+                order.customer_name = safe(payload.get("customer_name") or customer)
+                order.table = safe(payload.get("table"))
+                order.waiter = safe(payload.get("waiter"))
+                order.order_status = "Open"  # Dine In orders start as Open
+                
+                # Add order items
+                for item in payload.get("order_items", []):
+                    menu_item = item.get("name") or item.get("item_code") or item.get("item_name")
+                    if not menu_item:
+                        continue
+                    
+                    order.append(
+                        "order_items",
+                        {
+                            "menu_item": safe(menu_item),
+                            "qty": item.get("quantity") or item.get("qty") or 1,
+                            "rate": item.get("price") or item.get("rate") or 0,
+                            "amount": (item.get("price") or item.get("rate") or 0) * (item.get("quantity") or item.get("qty") or 1),
+                            "preparation_remark": safe(item.get("remark")),
+                        },
+                    )
+                
+                if not order.order_items or len(order.order_items) == 0:
+                    return {
+                        "success": False,
+                        "message": "No valid items in order",
+                        "details": "Cannot create order without items.",
+                    }
+                
+                frappe.flags.ignore_validate = True
+                try:
+                    order.insert(ignore_permissions=True)
+                    order_id = order.name
+                finally:
+                    frappe.flags.ignore_validate = False
+                
+                # Update table if needed
+                table_name = payload.get("table")
+                if table_name:
+                    try:
+                        table = frappe.get_doc("HA Table", table_name)
+                        table.assigned_waiter = safe(payload.get("waiter"))
+                        table.customer_name = safe(payload.get("customer_name") or customer)
+                        table.status = "Occupied"
+                        table.save(ignore_permissions=True, ignore_validate=True)
+                    except Exception:
+                        pass  # Skip table update if it fails
+                
+                frappe.db.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Dine In order created successfully",
+                    "order_id": order_id,
+                    "sales_invoice": None,  # No invoice for Dine In
+                    "payment_entry": None,  # No payment for Dine In
+                    "dine_in_only": True
+                }
+            except Exception as order_error:
+                frappe.db.rollback()
+                error_msg = f"Error creating Dine In order: {str(order_error)}\n{frappe.get_traceback()}"
+                frappe.log_error(error_msg, "Create Dine In Order Error")
+                return {
+                    "success": False,
+                    "message": "Failed to create Dine In order",
+                    "details": str(order_error),
+                }
+
         paid_amount = float(amount) if amount is not None else total
         if paid_amount > total:
             paid_amount = total
@@ -621,7 +915,7 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             frappe.flags.ignore_links = True
             try:
                 payment_entry.insert(ignore_permissions=True)
-                payment_entry.submit(ignore_permissions=True)
+                payment_entry.submit()
             finally:
                 frappe.flags.ignore_validate = False
                 frappe.flags.ignore_links = False
@@ -637,7 +931,7 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             order.customer_name = safe(payload.get("customer_name"))
             order.table = safe(payload.get("table"))
             order.waiter = safe(payload.get("waiter"))
-            order.payment_status = "Paid"
+            order.order_status = "Closed"
             for item in payload.get("order_items", []):
                 order.append(
                     "order_items",
@@ -1024,7 +1318,7 @@ def convert_quotation_to_sales_invoice_from_cart(
             ha_order.customer_name = safe(customer_name) or customer
             ha_order.table = safe(table) or ""
             ha_order.waiter = safe(waiter) or ""
-            ha_order.payment_status = "Unpaid"
+            ha_order.order_status = "Open"
             ha_order.sales_invoice = sales_invoice_name
 
             # Add items to HA Order
@@ -1251,7 +1545,7 @@ def create_transaction(
             ha_order.customer_name = safe(customer_name) or customer
             ha_order.table = safe(table) or ""
             ha_order.waiter = safe(waiter) or ""
-            ha_order.payment_status = "Unpaid"
+            ha_order.order_status = "Open"
             ha_order.sales_invoice = doc.name  # Link to Sales Invoice
 
             # Add items to HA Order
@@ -1655,7 +1949,7 @@ def process_payment_for_transaction_background(
                 
                 # Submit payment entry
                 try:
-                    payment_entry.submit(ignore_permissions=True)
+                    payment_entry.submit()
                 except Exception as submit_error:
                     # If submit fails, try to delete and recreate with ignore_validate
                     try:
@@ -2630,7 +2924,7 @@ def process_multi_currency_payment_background(customer, payments):
                     frappe.flags.ignore_links = False
                 
                 try:
-                    payment_entry.submit(ignore_permissions=True)
+                    payment_entry.submit()
                 except Exception as submit_error:
                     try:
                         if payment_entry.name:
@@ -3206,7 +3500,7 @@ def make_multi_currency_payment(customer, payments):
                 
                 # Submit payment entry (same as make_payment_for_transaction)
                 try:
-                    payment_entry.submit(ignore_permissions=True)
+                    payment_entry.submit()
                 except Exception as submit_error:
                     # If submit fails, try to delete and recreate
                     try:
@@ -3408,6 +3702,94 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
                 "details": "Cannot create invoice without items.",
             }
         
+        # Check if this is a Dine In order - if so, skip invoice and payment, only create HA Order
+        order_type = None
+        if order_payload:
+            if isinstance(order_payload, str):
+                import json
+                order_payload = json.loads(order_payload)
+            order_type = order_payload.get("order_type")
+        
+        # For Dine In orders, only create HA Order, skip Sales Invoice and Payment Entry
+        if order_type == "Dine In":
+            try:
+                # Create HA Order only
+                def safe(value):
+                    if not value:
+                        return ""
+                    return str(value)[:140]
+
+                order = frappe.new_doc("HA Order")
+                order.order_type = safe(order_payload.get("order_type"))
+                order.customer_name = safe(order_payload.get("customer_name") or customer)
+                order.table = safe(order_payload.get("table"))
+                order.waiter = safe(order_payload.get("waiter"))
+                order.order_status = "Open"  # Dine In orders start as Open
+                
+                # Add order items
+                for item in order_payload.get("order_items", []):
+                    menu_item = item.get("name") or item.get("item_code") or item.get("item_name") or item.get("menu_item")
+                    if not menu_item:
+                        continue
+                    
+                    order.append(
+                        "order_items",
+                        {
+                            "menu_item": str(menu_item),
+                            "qty": item.get("quantity") or item.get("qty") or 1,
+                            "rate": item.get("price") or item.get("rate") or 0,
+                            "amount": (item.get("price") or item.get("rate") or 0) * (item.get("quantity") or item.get("qty") or 1),
+                            "preparation_remark": safe(item.get("remark")),
+                        },
+                    )
+                
+                if not order.order_items or len(order.order_items) == 0:
+                    return {
+                        "success": False,
+                        "message": "No valid items in order",
+                        "details": "Cannot create order without items.",
+                    }
+                
+                frappe.flags.ignore_validate = True
+                try:
+                    order.insert(ignore_permissions=True)
+                    order_id = order.name
+                finally:
+                    frappe.flags.ignore_validate = False
+                
+                # Update table if needed
+                table_name = order_payload.get("table")
+                if table_name:
+                    try:
+                        table = frappe.get_doc("HA Table", table_name)
+                        table.assigned_waiter = safe(order_payload.get("waiter"))
+                        table.customer_name = safe(order_payload.get("customer_name") or customer)
+                        table.status = "Occupied"
+                        table.save(ignore_permissions=True, ignore_validate=True)
+                    except Exception:
+                        pass  # Skip table update if it fails
+                
+                frappe.db.commit()
+                
+                return {
+                    "success": True,
+                    "message": "Dine In order created successfully",
+                    "order_id": order_id,
+                    "sales_invoice": None,  # No invoice for Dine In
+                    "payment_entry": None,  # No payment for Dine In
+                    "dine_in_only": True
+                }
+            except Exception as order_error:
+                frappe.db.rollback()
+                error_msg = f"Error creating Dine In order: {str(order_error)}\n{frappe.get_traceback()}"
+                frappe.log_error(error_msg, "Create Dine In Order Error")
+                return {
+                    "success": False,
+                    "message": "Failed to create Dine In order",
+                    "details": str(order_error),
+                }
+        
+        # For non-Dine In orders, proceed with normal flow (create invoice and payment)
         # 1. Create Sales Invoice synchronously (immediate)
         from havano_restaurant_pos.havano_restaurant_pos.doctype.ha_pos_invoice.ha_pos_invoice import (
             create_sales_invoice,
@@ -3654,7 +4036,7 @@ def process_payment_entries(
                     order.customer_name = safe(order_payload.get("customer_name") or customer)
                     order.table = safe(order_payload.get("table"))
                     order.waiter = safe(order_payload.get("waiter"))
-                    order.payment_status = "Paid"
+                    order.order_status = "Closed"
                     # Link to sales invoice to prevent duplicates (if field exists)
                     if hasattr(order, 'sales_invoice'):
                         order.sales_invoice = invoice_name

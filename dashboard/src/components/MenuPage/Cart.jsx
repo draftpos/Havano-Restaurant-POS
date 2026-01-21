@@ -11,7 +11,8 @@ import {
   createTransaction, 
   getDefaultCustomer, 
   convertQuotationToSalesInvoiceFromCart,
-  generate_quotation_json
+  generate_quotation_json,
+  handleCreateOrder
 } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
@@ -206,8 +207,8 @@ const Cart = () => {
     }
 
     
-    // Place Order (F10) - Just open payment dialog, don't create sales invoice
-    // Sales invoice will be created only when Make Payment is clicked
+    // Place Order (F10) - For Dine In, create order directly without payment dialog
+    // For other order types, open payment dialog
     setIsSubmitting(true);
     try {
       // Get customer - use selected customer or get default
@@ -228,15 +229,65 @@ const Cart = () => {
         order_type: orderType || "Take Away",
         customer_name: selectedCustomer,
         order_items: cart.map((item) => ({
+          name: item.name || item.item_name,
           item_code: item.name || item.item_name,
+          quantity: item.quantity || 1,
           qty: item.quantity || 1,
+          price: item.price || item.standard_rate || 0,
           rate: item.price || item.standard_rate || 0,
+          remark: item.remark || "",
         })),
         table: activeTableId || null,
         waiter: activeWaiterId || null,
         agent: selectedAgent || null,
       };
 
+      // For Dine In orders, create order directly without payment dialog
+      if (orderType === "Dine In") {
+        try {
+          const result = await handleCreateOrder(payload);
+          
+          if (result && result.success !== false) {
+            toast.success("Order created successfully", {
+              description: result.order_id ? `Order ID: ${result.order_id}` : "Order placed",
+              duration: 4000,
+            });
+            
+            clearCart();
+            
+            // Refresh orders
+            try {
+              await fetchOrders();
+              if (activeTableId) {
+                await fetchTableOrders(activeTableId);
+              }
+            } catch (refreshErr) {
+              console.error("Failed to refresh orders:", refreshErr);
+            }
+            
+            // Navigate to table details if we have a table
+            if (activeTableId) {
+              navigate(`/tables/${activeTableId}`);
+            }
+          } else {
+            toast.error("Failed to create order", {
+              description: result?.message || result?.details || "Please try again later.",
+              duration: 5000,
+            });
+          }
+        } catch (orderErr) {
+          console.error("Error creating order:", orderErr);
+          toast.error("Failed to create order", {
+            description: orderErr?.message || "Please try again later.",
+            duration: 5000,
+          });
+        } finally {
+          setIsSubmitting(false);
+        }
+        return;
+      }
+
+      // For non-Dine In orders, open payment dialog
       setPaymentState({
         open: true,
         orderId: null,

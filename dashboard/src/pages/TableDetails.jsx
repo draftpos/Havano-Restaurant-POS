@@ -8,6 +8,7 @@ import Error from "@/components/Error";
 import Loader from "@/components/Loader";
 import Container from "@/components/Shared/Container";
 import OrderDetailsDialog from "@/components/Shared/OrderDetailsDialog";
+import PaymentDialog from "@/components/MenuPage/PaymentDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,8 +36,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Combobox } from "@/components/ui/combobox";
 import { db } from "@/lib/frappeClient";
-import { formatCurrency, markTableAsPaid } from "@/lib/utils";
+import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
 import { useTableStore } from "@/stores/useTableStore";
@@ -48,6 +50,9 @@ const TableDetails = () => {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [isTableStatusUpdating, setIsTableStatusUpdating] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const navigate = useNavigate();
   const { id } = useParams();
   const { register, setValue, watch } = useForm({
@@ -89,17 +94,73 @@ const TableDetails = () => {
   }, [id, fetchTableOrders, fetchWaiters]);
 
   useEffect(() => {
+    const fetchCustomersData = async () => {
+      setLoadingCustomers(true);
+      try {
+        const customerList = await getCustomers();
+        setCustomers(customerList);
+      } catch (err) {
+        console.error("Error loading customers:", err);
+        toast.error("Failed to load customers", {
+          description: "Please try refreshing the page",
+          duration: 4000,
+        });
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    fetchCustomersData();
+  }, []);
+
+  useEffect(() => {
+    const setDefaultCustomer = async () => {
+      if (tableDetails?.customer_name) {
+        // Check if customer_name is a customer ID (exists in customers list)
+        const customer = customers.find(
+          (c) => c.name === tableDetails.customer_name || c.customer_name === tableDetails.customer_name
+        );
+        if (customer) {
+          setValue("customerName", customer.name);
+        } else {
+          // If not found, it might be just a display name, try to find by customer_name
+          const customerByName = customers.find(
+            (c) => c.customer_name === tableDetails.customer_name
+          );
+          if (customerByName) {
+            setValue("customerName", customerByName.name);
+          } else {
+            // If still not found, set as is (might be a text value)
+            setValue("customerName", tableDetails.customer_name);
+          }
+        }
+      } else {
+        // Set default customer from settings if no customer is set
+        try {
+          const defaultCustomer = await getDefaultCustomer();
+          if (defaultCustomer) {
+            setValue("customerName", defaultCustomer);
+          } else {
+            setValue("customerName", "");
+          }
+        } catch (err) {
+          console.error("Error fetching default customer:", err);
+          setValue("customerName", "");
+        }
+      }
+    };
+    // Only set default customer after customers are loaded
+    if (customers.length > 0 || !loadingCustomers) {
+      setDefaultCustomer();
+    }
+  }, [tableDetails, customers, loadingCustomers, setValue]);
+
+  useEffect(() => {
     if (tableDetails?.assigned_waiter) {
       setValue("waiter", tableDetails.assigned_waiter);
     } else {
       setValue("waiter", "");
     }
-    if (tableDetails?.customer_name) {
-      setValue("customerName", tableDetails.customer_name);
-    } else {
-      setValue("customerName", "");
-    }
-  }, [tableOrders, setValue]);
+  }, [tableDetails, setValue]);
 
 
 
@@ -169,22 +230,20 @@ const TableDetails = () => {
     }
   };
 
-  const handleMarkAsPaid = async () => {
-    if (!id) {
-      return;
-    }
-    try {
-      setIsMarkingPaid(true);
-      await markTableAsPaid(id);
-      toast.success("Table marked as paid.");
+  const handleMarkAsPaid = () => {
+    // Open payment dialog with total from all orders
+    setIsPaymentDialogOpen(true);
+  };
+
+  const handleTablePaymentPaid = async (paymentResult) => {
+    // Payment dialog will handle the actual payment processing
+    // This callback is just for UI updates after payment
+    if (paymentResult && paymentResult.success) {
+      // Refresh data
       if (id) {
         await fetchTableOrders(id);
         await fetchTableDetails(id);
       }
-    } catch (err) {
-      toast.error("Failed to mark table as paid.");
-    } finally {
-      setIsMarkingPaid(false);
     }
   };
 
@@ -298,7 +357,7 @@ const TableDetails = () => {
                       <TableCell></TableCell>
                       <TableCell className="font-bold text-right">
                         {formatCurrency(
-                          tableOrders.reduce((sum, o) => sum + o.value, 0)
+                          tableOrders.reduce((sum, o) => sum + (o.total_price || o.value || 0), 0)
                         )}
                       </TableCell>
                       <TableCell></TableCell>
@@ -322,7 +381,37 @@ const TableDetails = () => {
                   <div className="flex flex-col gap-4">
                     <div className="space-y-4">
                       <Label>Customer Name</Label>
-                      <Input {...register("customerName")} />
+                      <Combobox
+                        type="customer"
+                        options={customers.map((cust) => ({
+                          value: cust.name,
+                          name: cust.name,
+                          customer_name: cust.customer_name,
+                          label: cust.customer_name || cust.name,
+                        }))}
+                        value={watch("customerName")}
+                        onValueChange={(value) =>
+                          setValue("customerName", value, { shouldValidate: true })
+                        }
+                        placeholder={loadingCustomers ? "Loading..." : "Select customer"}
+                        searchPlaceholder="Search customers..."
+                        disabled={loadingCustomers}
+                        className="w-full"
+                        onCreate
+                        onCreated={(newCustomer) => {
+                          // Add new customer to the list and refresh
+                          const refreshCustomers = async () => {
+                            try {
+                              const customerList = await getCustomers();
+                              setCustomers(customerList);
+                            } catch (err) {
+                              console.error("Error refreshing customers:", err);
+                            }
+                          };
+                          refreshCustomers();
+                          setValue("customerName", newCustomer.value, { shouldValidate: true });
+                        }}
+                      />
                     </div>
                     <div className="space-y-4">
                       <Label>Waiter</Label>
@@ -331,9 +420,7 @@ const TableDetails = () => {
                         onValueChange={(value) =>
                           setValue("waiter", value, { shouldValidate: true })
                         }
-                        disabled={
-                          tableDetails.status === "Occupied" || loadingWaiters
-                        }
+                        disabled={loadingWaiters}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select waiter" />
@@ -427,6 +514,44 @@ const TableDetails = () => {
           }
           await fetchTableDetails(id);
         }}
+      />
+      <PaymentDialog
+        open={isPaymentDialogOpen}
+        onOpenChange={setIsPaymentDialogOpen}
+        onPaid={handleTablePaymentPaid}
+        cartItems={tableOrders.flatMap(order => {
+          // Create summary items from orders
+          return [{
+            name: order.name,
+            item_name: `Order ${order.name}`,
+            quantity: 1,
+            price: order.total_price || order.value || 0,
+            standard_rate: order.total_price || order.value || 0
+          }];
+        })}
+        customer={tableDetails?.customer_name || watch("customerName") || ""}
+        orderId={null}
+        orderPayload={{
+          order_type: "Dine In",
+          customer_name: tableDetails?.customer_name || watch("customerName") || "",
+          table: id,
+          waiter: watch("waiter") || tableDetails?.assigned_waiter || "",
+          order_items: tableOrders.flatMap(order => {
+            // We need to fetch order items, but for now use summary
+            return [{
+              name: order.name,
+              item_code: order.name,
+              quantity: 1,
+              qty: 1,
+              price: order.total_price || order.value || 0,
+              rate: order.total_price || order.value || 0
+            }];
+          }),
+          table_orders: tableOrders.map(order => order.name || order.order)
+        }}
+        isExistingTransaction={false}
+        transactionDoctype={null}
+        transactionName={null}
       />
     </Container>
   );

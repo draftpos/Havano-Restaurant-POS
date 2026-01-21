@@ -10,7 +10,7 @@ import {
 import MultiCurrencyDialog from "./MultiCurrencyDialog";
 import Keyboard from "@/components/ui/Keyboard";
 import { Textarea } from "@/components/ui/textarea";
-import { createInvoiceAndPaymentQueue, makePaymentForTransaction, get_invoice_json } from "@/lib/utils";
+import { createInvoiceAndPaymentQueue, makePaymentForTransaction, get_invoice_json, processTablePayment } from "@/lib/utils";
 import { db, call } from "@/lib/frappeClient";
 
 export default function PaymentDialog({
@@ -219,7 +219,7 @@ export default function PaymentDialog({
             paymentBreakdown.length > 0 ? paymentBreakdown : null
           );
         } else {
-          // Create new order and payment using queue (sales invoice and payment created in background)
+          // Check if this is a table payment (has table_orders in payload)
           const payload =
             orderPayload ||
             ({
@@ -235,7 +235,34 @@ export default function PaymentDialog({
             return;
           }
 
-          // Use queue system for async processing (background)
+          // Check if this is table payment
+          if (payload.table_orders && payload.table && payload.order_type === "Dine In") {
+            // Process table payment
+            try {
+              const res = await processTablePayment(
+                payload.table,
+                payload.table_orders,
+                total,
+                paidTotal > 0 ? paidTotal : null,
+                paymentBreakdown.length === 1 ? payment_method : null,
+                fullNote,
+                paymentBreakdown.length > 0 ? paymentBreakdown : null
+              );
+              
+              if (res && res.success) {
+                console.log("Table payment processed:", res.sales_invoice);
+                // Print invoice if available
+                if (res.sales_invoice) {
+                  window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+                }
+              }
+            } catch (error) {
+              console.error("Error processing table payment:", error);
+            }
+            return;
+          }
+
+          // Use queue system for async processing (background) for regular orders
           const res = await createInvoiceAndPaymentQueue(
             cartItems,
             finalCustomer,
@@ -246,31 +273,37 @@ export default function PaymentDialog({
             payload
           );
           console.log("direct-----------------DD--------", res.sales_invoice)
-          try {
-                  console.log("Payment successful bro:", res.sales_invoice);
-                  // const invoiceJson = await get_invoice_json(res.sales_invoice);
-                  // console.log("Invoice JSON returned from backend:", invoiceJson);
-                  window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
-                  
-                  // Convert JSON to string
-                  // const jsonStr = JSON.stringify(invoiceJson, null, 2);
-                  // // Create a blob and download (optimized: async download)
-                  // const blob = new Blob([jsonStr], { type: "text/plain" });
-                  // const link = document.createElement("a");
-                  // link.href = URL.createObjectURL(blob);
-                  // link.download = `${res.sales_invoice}.txt`;
-                  // document.body.appendChild(link);
-                  // link.click();
-                  // // Cleanup asynchronously (non-blocking)
-                  // setTimeout(() => {
-                  //   document.body.removeChild(link);
-                  //   URL.revokeObjectURL(link.href);
-                  // }, 0);
-              } 
-          catch (error) {
-                console.error("Error fetching invoice JSON:", error);
-                // Continue with payment even if JSON fetch fails
-                }
+          
+          // For Dine In orders, no invoice is created, so skip invoice download
+          if (res.dine_in_only) {
+            console.log("Dine In order created successfully:", res.order_id);
+            // No invoice to download for Dine In orders
+          } else if (res.sales_invoice) {
+            try {
+              console.log("Payment successful bro:", res.sales_invoice);
+              // const invoiceJson = await get_invoice_json(res.sales_invoice);
+              // console.log("Invoice JSON returned from backend:", invoiceJson);
+              window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+              
+              // Convert JSON to string
+              // const jsonStr = JSON.stringify(invoiceJson, null, 2);
+              // // Create a blob and download (optimized: async download)
+              // const blob = new Blob([jsonStr], { type: "text/plain" });
+              // const link = document.createElement("a");
+              // link.href = URL.createObjectURL(blob);
+              // link.download = `${res.sales_invoice}.txt`;
+              // document.body.appendChild(link);
+              // link.click();
+              // // Cleanup asynchronously (non-blocking)
+              // setTimeout(() => {
+              //   document.body.removeChild(link);
+              //   URL.revokeObjectURL(link.href);
+              // }, 0);
+            } catch (error) {
+              console.error("Error fetching invoice JSON:", error);
+              // Continue with payment even if JSON fetch fails
+            }
+          }
 
         }
       } catch (err) {
