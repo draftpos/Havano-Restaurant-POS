@@ -468,75 +468,164 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
                 "message": "Failed to create sales invoice",
             }
         
-        # Create Payment Entry
+        # Create Payment Entry (only for non-credit payment methods)
         paid_amount = float(amount) if amount is not None else float(total)
         if paid_amount > total:
             paid_amount = float(total)
         
-        # Get company accounts
-        company_data = frappe.get_cached_value(
-            "Company",
-            company,
-            ["default_currency", "default_receivable_account", "default_cash_account"],
-            as_dict=True
-        )
+        payment_entry_name = None
         
-        paid_from_account = company_data.get("default_receivable_account")
-        default_paid_to_account = company_data.get("default_cash_account") or paid_from_account
-        
-        # Handle payment method
-        if payment_method == "Multi":
-            payment_method = "Cash"
-        payment_method = payment_method or "Cash"
-        
-        # Get account from mode of payment
-        mode_account = default_paid_to_account
-        if payment_method and payment_method != "Cash":
-            mode_accounts = frappe.get_all(
-                "Mode of Payment Account",
-                filters={"parent": payment_method, "company": company},
-                fields=["default_account"],
-                limit=1
-            )
-            if mode_accounts and mode_accounts[0].default_account:
-                mode_account = mode_accounts[0].default_account
-        
-        # Create payment entry
-        payment_entry = frappe.new_doc("Payment Entry")
-        payment_entry.payment_type = "Receive"
-        payment_entry.party_type = "Customer"
-        payment_entry.party = customer
-        payment_entry.company = company
-        payment_entry.posting_date = frappe.utils.nowdate()
-        payment_entry.paid_from = paid_from_account
-        payment_entry.paid_to = mode_account
-        payment_entry.paid_amount = paid_amount
-        payment_entry.received_amount = paid_amount
-        payment_entry.source_exchange_rate = 1.0
-        payment_entry.target_exchange_rate = 1.0
-        payment_entry.remarks = note or "Table Payment"
-        payment_entry.mode_of_payment = payment_method
-        
-        # Add reference to sales invoice
-        payment_entry.append("references", {
-            "reference_doctype": "Sales Invoice",
-            "reference_name": invoice_name,
-            "allocated_amount": paid_amount,
-        })
-        
-        frappe.flags.ignore_validate = True
-        frappe.flags.ignore_links = True
-        try:
-            payment_entry.insert(ignore_permissions=True)
-            payment_entry.submit()
-        finally:
-            frappe.flags.ignore_validate = False
-            frappe.flags.ignore_links = False
+        # Check if we have payment_breakdown (multiple payment methods)
+        if payment_breakdown:
+            if isinstance(payment_breakdown, str):
+                import json
+                payment_breakdown = frappe.parse_json(payment_breakdown)
+            
+            # Process each payment method in breakdown
+            non_credit_total = 0
+            for payment in payment_breakdown:
+                method = payment.get("payment_method") or payment.get("mode")
+                amount_val = float(payment.get("amount", 0))
+                
+                # Only create payment entry for non-credit methods
+                if not is_payment_method_credit(method):
+                    non_credit_total += amount_val
+            
+            # Only create payment entry if there are non-credit payments
+            if non_credit_total > 0:
+                # Get company accounts
+                company_data = frappe.get_cached_value(
+                    "Company",
+                    company,
+                    ["default_currency", "default_receivable_account", "default_cash_account"],
+                    as_dict=True
+                )
+                
+                paid_from_account = company_data.get("default_receivable_account")
+                default_paid_to_account = company_data.get("default_cash_account") or paid_from_account
+                
+                # Use first non-credit method for payment entry (or Cash as default)
+                primary_method = "Cash"
+                for payment in payment_breakdown:
+                    method = payment.get("payment_method") or payment.get("mode")
+                    if not is_payment_method_credit(method):
+                        primary_method = method
+                        break
+                
+                # Get account from mode of payment
+                mode_account = default_paid_to_account
+                if primary_method and primary_method != "Cash":
+                    mode_accounts = frappe.get_all(
+                        "Mode of Payment Account",
+                        filters={"parent": primary_method, "company": company},
+                        fields=["default_account"],
+                        limit=1
+                    )
+                    if mode_accounts and mode_accounts[0].default_account:
+                        mode_account = mode_accounts[0].default_account
+                
+                # Create payment entry for non-credit total
+                payment_entry = frappe.new_doc("Payment Entry")
+                payment_entry.payment_type = "Receive"
+                payment_entry.party_type = "Customer"
+                payment_entry.party = customer
+                payment_entry.company = company
+                payment_entry.posting_date = frappe.utils.nowdate()
+                payment_entry.paid_from = paid_from_account
+                payment_entry.paid_to = mode_account
+                payment_entry.paid_amount = non_credit_total
+                payment_entry.received_amount = non_credit_total
+                payment_entry.source_exchange_rate = 1.0
+                payment_entry.target_exchange_rate = 1.0
+                payment_entry.remarks = note or "Table Payment"
+                payment_entry.mode_of_payment = primary_method
+                
+                # Add reference to sales invoice
+                payment_entry.append("references", {
+                    "reference_doctype": "Sales Invoice",
+                    "reference_name": invoice_name,
+                    "allocated_amount": non_credit_total,
+                })
+                
+                frappe.flags.ignore_validate = True
+                frappe.flags.ignore_links = True
+                try:
+                    payment_entry.insert(ignore_permissions=True)
+                    payment_entry.submit()
+                    payment_entry_name = payment_entry.name
+                finally:
+                    frappe.flags.ignore_validate = False
+                    frappe.flags.ignore_links = False
+        else:
+            # Single payment method
+            # Handle payment method
+            if payment_method == "Multi":
+                payment_method = "Cash"
+            payment_method = payment_method or "Cash"
+            
+            # Only create payment entry if payment method is NOT credit
+            if not is_payment_method_credit(payment_method):
+                # Get company accounts
+                company_data = frappe.get_cached_value(
+                    "Company",
+                    company,
+                    ["default_currency", "default_receivable_account", "default_cash_account"],
+                    as_dict=True
+                )
+                
+                paid_from_account = company_data.get("default_receivable_account")
+                default_paid_to_account = company_data.get("default_cash_account") or paid_from_account
+                
+                # Get account from mode of payment
+                mode_account = default_paid_to_account
+                if payment_method and payment_method != "Cash":
+                    mode_accounts = frappe.get_all(
+                        "Mode of Payment Account",
+                        filters={"parent": payment_method, "company": company},
+                        fields=["default_account"],
+                        limit=1
+                    )
+                    if mode_accounts and mode_accounts[0].default_account:
+                        mode_account = mode_accounts[0].default_account
+                
+                # Create payment entry
+                payment_entry = frappe.new_doc("Payment Entry")
+                payment_entry.payment_type = "Receive"
+                payment_entry.party_type = "Customer"
+                payment_entry.party = customer
+                payment_entry.company = company
+                payment_entry.posting_date = frappe.utils.nowdate()
+                payment_entry.paid_from = paid_from_account
+                payment_entry.paid_to = mode_account
+                payment_entry.paid_amount = paid_amount
+                payment_entry.received_amount = paid_amount
+                payment_entry.source_exchange_rate = 1.0
+                payment_entry.target_exchange_rate = 1.0
+                payment_entry.remarks = note or "Table Payment"
+                payment_entry.mode_of_payment = payment_method
+                
+                # Add reference to sales invoice
+                payment_entry.append("references", {
+                    "reference_doctype": "Sales Invoice",
+                    "reference_name": invoice_name,
+                    "allocated_amount": paid_amount,
+                })
+                
+                frappe.flags.ignore_validate = True
+                frappe.flags.ignore_links = True
+                try:
+                    payment_entry.insert(ignore_permissions=True)
+                    payment_entry.submit()
+                    payment_entry_name = payment_entry.name
+                finally:
+                    frappe.flags.ignore_validate = False
+                    frappe.flags.ignore_links = False
         
         # Update HA Orders with invoice and payment, submit, and mark as closed
         for order_doc in orders_to_update:
             order_doc.sales_invoice = invoice_name
-            order_doc.payment_entry = payment_entry.name
+            if payment_entry_name:
+                order_doc.payment_entry = payment_entry_name
             order_doc.order_status = "Closed"
             
             # Submit order if not already submitted
@@ -555,7 +644,7 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
             "success": True,
             "message": "Table payment processed successfully",
             "sales_invoice": invoice_name,
-            "payment_entry": payment_entry.name,
+            "payment_entry": payment_entry_name,
             "order_ids": [order.name for order in orders_to_update],
         }
         
@@ -604,7 +693,11 @@ def mark_table_as_paid(table):
                 )
 
             order_doc.order_status = "Closed"
-            order_doc.save(ignore_permissions=True)
+            # Submit order if not already submitted
+            if order_doc.docstatus == 0:
+                order_doc.submit()
+            else:
+                order_doc.save(ignore_permissions=True)
             frappe.db.commit()
 
         merged_items = []
@@ -879,46 +972,49 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
 
         # 3 Create all documents in sequence, batch commit at end
         try:
-            # Create payment entry
-            payment_entry = frappe.new_doc("Payment Entry")
-            payment_entry.payment_type = "Receive"
-            payment_entry.party_type = "Customer"
-            payment_entry.party = customer
-            payment_entry.company = company
-            payment_entry.posting_date = frappe.utils.nowdate()
-            payment_entry.paid_from = paid_from_account
-            payment_entry.paid_to = mode_account  # Use default account from Mode of Payment Account
-            payment_entry.paid_from_account_currency = paid_from_currency
-            payment_entry.paid_to_account_currency = paid_to_currency
-            payment_entry.paid_amount = paid_amount
-            payment_entry.received_amount = received_amount
-            payment_entry.source_exchange_rate = source_exchange_rate
-            payment_entry.target_exchange_rate = target_exchange_rate
-            
-            # For Bank transactions, reference_no and reference_date are mandatory
-            # Check both mode_type and account_type to be safe
-            is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
-            
-            if is_bank_transaction:
-                # Always set reference_no and reference_date for Bank transactions
-                payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
-                payment_entry.reference_date = frappe.utils.nowdate()
-            else:
-                payment_entry.reference_no = None
-                payment_entry.reference_date = None
+            # Create payment entry (only if payment method is NOT credit)
+            payment_entry_name = None
+            if not is_payment_method_credit(payment_method):
+                payment_entry = frappe.new_doc("Payment Entry")
+                payment_entry.payment_type = "Receive"
+                payment_entry.party_type = "Customer"
+                payment_entry.party = customer
+                payment_entry.company = company
+                payment_entry.posting_date = frappe.utils.nowdate()
+                payment_entry.paid_from = paid_from_account
+                payment_entry.paid_to = mode_account  # Use default account from Mode of Payment Account
+                payment_entry.paid_from_account_currency = paid_from_currency
+                payment_entry.paid_to_account_currency = paid_to_currency
+                payment_entry.paid_amount = paid_amount
+                payment_entry.received_amount = received_amount
+                payment_entry.source_exchange_rate = source_exchange_rate
+                payment_entry.target_exchange_rate = target_exchange_rate
                 
-            payment_entry.remarks = note or "POS Payment"
-            payment_entry.mode_of_payment = payment_method
-            
-            # Use frappe.flags to bypass validation if needed
-            frappe.flags.ignore_validate = True
-            frappe.flags.ignore_links = True
-            try:
-                payment_entry.insert(ignore_permissions=True)
-                payment_entry.submit()
-            finally:
-                frappe.flags.ignore_validate = False
-                frappe.flags.ignore_links = False
+                # For Bank transactions, reference_no and reference_date are mandatory
+                # Check both mode_type and account_type to be safe
+                is_bank_transaction = (mode_type == "Bank") or (account_type == "Bank")
+                
+                if is_bank_transaction:
+                    # Always set reference_no and reference_date for Bank transactions
+                    payment_entry.reference_no = f"REF-{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
+                    payment_entry.reference_date = frappe.utils.nowdate()
+                else:
+                    payment_entry.reference_no = None
+                    payment_entry.reference_date = None
+                    
+                payment_entry.remarks = note or "POS Payment"
+                payment_entry.mode_of_payment = payment_method
+                
+                # Use frappe.flags to bypass validation if needed
+                frappe.flags.ignore_validate = True
+                frappe.flags.ignore_links = True
+                try:
+                    payment_entry.insert(ignore_permissions=True)
+                    payment_entry.submit()
+                    payment_entry_name = payment_entry.name
+                finally:
+                    frappe.flags.ignore_validate = False
+                    frappe.flags.ignore_links = False
 
             # Create HA Order
             def safe(value):
@@ -947,6 +1043,9 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             frappe.flags.ignore_validate = True
             try:
                 order.insert(ignore_permissions=True)
+                # Submit order if status is Closed
+                if order.order_status == "Closed" and order.docstatus == 0:
+                    order.submit()
             finally:
                 frappe.flags.ignore_validate = False
             order_id = order.name
@@ -977,7 +1076,7 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
                 "message": "Order, invoice and payment created",
                 "order_id": order_id,
                 "sales_invoice": inv.get("name") if isinstance(inv, dict) else inv,
-                "payment_entry": payment_entry.name,
+                "payment_entry": payment_entry_name,
             }
         except Exception as e:
             frappe.db.rollback()
@@ -1770,6 +1869,12 @@ def process_payment_for_transaction_background(
                 paid_amount = remaining_outstanding
 
             if paid_amount <= 0:
+                continue
+
+            # Check if payment method is credit - skip payment entry creation for credit methods
+            if is_payment_method_credit(method):
+                # For credit methods, just reduce outstanding but don't create payment entry
+                remaining_outstanding -= paid_amount
                 continue
 
             # Validate mode of payment exists and get default account
@@ -2612,6 +2717,20 @@ def get_ha_pos_settings():
             "success": False,
             "error": str(e)
         }
+
+
+def is_payment_method_credit(payment_method):
+    """Check if a payment method has is_credit checked in HA POS Settings"""
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        if settings.selected_payment_methods:
+            for method in settings.selected_payment_methods:
+                if method.mode_of_payment == payment_method:
+                    return bool(method.is_credit)
+        return False
+    except Exception as e:
+        frappe.log_error(f"Error checking payment method credit status: {str(e)}")
+        return False
 
 
 @frappe.whitelist()
@@ -4077,6 +4196,9 @@ def process_payment_entries(
                         try:
                             # Try to insert the order
                             order.insert(ignore_permissions=True)
+                            # Submit order if status is Closed
+                            if order.order_status == "Closed" and order.docstatus == 0:
+                                order.submit()
                             order_id = order.name
                             frappe.logger().info(f"Successfully created HA Order {order_id} for invoice {invoice_name}")
                         except frappe.DuplicateEntryError as dup_error:

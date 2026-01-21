@@ -72,7 +72,11 @@ class HAOrder(Document):
         sales_invoice.insert()
         sales_invoice.submit()
         self.order_status = "Closed"
-        self.save(ignore_permissions=True)
+        # Submit order if not already submitted
+        if self.docstatus == 0:
+            self.submit()
+        else:
+            self.save(ignore_permissions=True)
 
         frappe.db.commit()
 
