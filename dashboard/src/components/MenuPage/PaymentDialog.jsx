@@ -171,20 +171,8 @@ export default function PaymentDialog({
 
     const fullNote = note ? `${note} | ${breakdown}` : breakdown;
 
-    // Check if this is a table payment before optimistic UI
-    const payload =
-      orderPayload ||
-      ({
-        order_type: "Take Away",
-        customer_name: customer || (orderPayload && orderPayload.customer_name) || "",
-        order_items: cartItems,
-      });
-    
-    const isTablePayment = payload.table_orders && payload.table && payload.order_type === "Dine In";
-
     // Immediately show success and close dialog (optimistic UI)
-    // But don't call onPaid for table payments yet - wait for actual processing
-    if (!isTablePayment && typeof onPaid === "function") {
+    if (typeof onPaid === "function") {
       onPaid({ success: true, message: "Payment processing..." });
     }
     if (typeof onOpenChange === "function") {
@@ -231,19 +219,24 @@ export default function PaymentDialog({
             paymentBreakdown.length > 0 ? paymentBreakdown : null
           );
         } else {
+          // Check if this is a table payment (has table_orders in payload)
+          const payload =
+            orderPayload ||
+            ({
+              order_type: "Take Away",
+              customer_name: customer || (orderPayload && orderPayload.customer_name) || "",
+              order_items: cartItems,
+            });
+
           // Ensure customer is set
           const finalCustomer = payload.customer_name || customer;
           if (!finalCustomer) {
             console.error("Customer is required");
-            // Notify callback of error
-            if (isTablePayment && typeof onPaid === "function") {
-              onPaid({ success: false, message: "Customer is required" });
-            }
             return;
           }
 
           // Check if this is table payment
-          if (isTablePayment) {
+          if (payload.table_orders && payload.table && payload.order_type === "Dine In") {
             // Process table payment
             try {
               const res = await processTablePayment(
@@ -262,22 +255,13 @@ export default function PaymentDialog({
                 if (res.sales_invoice) {
                   window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
                 }
-                // Notify payment success callback after actual payment processing
+                // Notify payment success callback AFTER payment is fully complete
                 if (typeof onPaid === "function") {
                   onPaid({ success: true, message: "Payment successful" });
-                }
-              } else {
-                // Payment failed, notify callback
-                if (typeof onPaid === "function") {
-                  onPaid({ success: false, message: res?.message || "Payment failed" });
                 }
               }
             } catch (error) {
               console.error("Error processing table payment:", error);
-              // Notify callback of error
-              if (typeof onPaid === "function") {
-                onPaid({ success: false, message: error?.message || "Payment processing error" });
-              }
             }
             return;
           }

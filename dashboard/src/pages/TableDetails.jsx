@@ -239,8 +239,9 @@ const TableDetails = () => {
   const handleTablePaymentPaid = async (paymentResult) => {
     // Payment dialog will handle the actual payment processing
     // This callback is just for UI updates after payment
-    if (paymentResult && paymentResult.success) {
-      // Refresh data
+    // Only refresh after payment is fully complete
+    if (paymentResult && paymentResult.success && paymentResult.message === "Payment successful") {
+      // Refresh data only after payment is fully complete
       if (id) {
         await fetchTableOrders(id);
         await fetchTableDetails(id);
