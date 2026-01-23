@@ -223,10 +223,8 @@ export default function MultiCurrencyDialog({
     if (isNaN(amount) || amount === 0) return 0;
 
     // Exchange rate is FROM payment currency TO company currency
-    // So to convert payment amount to base currency: multiply by rate
-    // Example: 100 EUR * 1.1 (EUR to USD rate) = 110 USD
-    console.log(`Converting ${amount} ${key} to base using rate ${ratesAtOpen[key]}`);
-    console.log("the real zwg"+amount *ratesAtOpen[key])
+    // So to convert payment amount to base currency: divide by rate
+    // Example: 431.60 ZWG / 33.2 (ZWG to USD rate) = 13 USD
     return amount / ratesAtOpen[key];
   };
 
@@ -242,9 +240,8 @@ export default function MultiCurrencyDialog({
   const getAmountDue = (key) => {
     if (!ratesAtOpen || !ratesAtOpen[key]) return 0;
     // Exchange rate is FROM payment currency TO company currency
-    // So to convert base currency to payment currency: divide by rate
-    // Example: 100 USD / 1.1 (EUR to USD rate) = 90.91 EUR
-    console.log("the remaining base: "+remainingBase+"rate at open: "+ratesAtOpen)
+    // So to convert base currency to payment currency: multiply by rate
+    // Example: 13 USD * 33.2 (ZWG to USD rate) = 431.60 ZWG
     return remainingBase * ratesAtOpen[key];
   };
   return (

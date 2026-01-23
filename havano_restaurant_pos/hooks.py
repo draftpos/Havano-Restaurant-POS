@@ -90,6 +90,7 @@ website_route_rules = [
 
 # before_install = "havano_restaurant_pos.install.before_install"
 # after_install = "havano_restaurant_pos.install.after_install"
+after_migrate = ["havano_restaurant_pos.overrides.apply_trial_balance_fix"]
 
 # Uninstallation
 # ------------
@@ -208,6 +209,7 @@ doc_events = {
 # ----------------
 # before_request = ["havano_restaurant_pos.utils.before_request"]
 # after_request = ["havano_restaurant_pos.utils.after_request"]
+before_request = ["havano_restaurant_pos.overrides.apply_trial_balance_fix"]
 
 # Job Events
 # ----------

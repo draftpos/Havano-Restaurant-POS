@@ -962,6 +962,8 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
                     "details": str(order_error),
                 }
 
+        # paid_amount is the amount in company currency (paid_from_currency)
+        # This is the currency converted amount (converted to company currency if payment was in different currency)
         paid_amount = float(amount) if amount is not None else total
         if paid_amount > total:
             paid_amount = total
@@ -969,13 +971,17 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
         # Calculate exchange rates (only if currencies differ)
         source_exchange_rate = 1.0
         target_exchange_rate = 1.0
+        # received_amount should be in paid_to_account_currency (payment method currency)
+        # This is the default currency converted amount (converted to payment currency)
         received_amount = paid_amount
         if paid_from_currency != paid_to_currency:
             try:
                 from erpnext.setup.utils import get_exchange_rate
+                # Get exchange rate from company currency (paid_from) to payment currency (paid_to)
                 target_exchange_rate = get_exchange_rate(
                     paid_from_currency, paid_to_currency, frappe.utils.nowdate()
                 )
+                # Convert paid_amount (in company currency) to payment currency for received_amount
                 received_amount = paid_amount * target_exchange_rate
             except Exception:
                 # Default to 1.0 on error (skip logging for performance)
@@ -1879,6 +1885,8 @@ def process_payment_for_transaction_background(
         created_payments = []
         remaining_outstanding = float(outstanding_amount)
         error_messages = []  # Collect error messages for debugging
+        credit_payments_total = 0  # Track total credit payments
+        credit_payments_count = 0  # Track number of credit payments
 
         for payment_info in payments_list:
             method = payment_info.get("payment_method", "Cash")
@@ -1895,9 +1903,17 @@ def process_payment_for_transaction_background(
                 continue
 
             # Check if payment method is credit - skip payment entry creation for credit methods
-            if is_payment_method_credit(method):
+            try:
+                is_credit = is_payment_method_credit(method)
+            except Exception as credit_check_error:
+                frappe.log_error(f"Error checking credit status for {method}: {str(credit_check_error)}", "Credit Check Error")
+                is_credit = False
+            
+            if is_credit:
                 # For credit methods, just reduce outstanding but don't create payment entry
                 remaining_outstanding -= paid_amount
+                credit_payments_total += paid_amount
+                credit_payments_count += 1
                 continue
 
             # Validate mode of payment exists and get default account
@@ -1974,14 +1990,18 @@ def process_payment_for_transaction_background(
 
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
+            # paid_amount is in company currency (paid_from_currency) - currency converted amount
+            # received_amount should be in payment currency (paid_to_account_currency) - default currency converted amount
             received_amount = paid_amount
 
             if paid_from_currency != mode_account_currency:
                 try:
                     from erpnext.setup.utils import get_exchange_rate
+                    # Get exchange rate from company currency to payment currency
                     target_exchange_rate = get_exchange_rate(
                         paid_from_currency, mode_account_currency, frappe.utils.nowdate()
                     )
+                    # Convert paid_amount (in company currency) to payment currency for received_amount
                     received_amount = paid_amount * target_exchange_rate
                 except Exception:
                     # Default to 1.0 on error (skip logging for performance)
@@ -2182,6 +2202,17 @@ def process_payment_for_transaction_background(
             frappe.db.rollback()
 
         if not created_payments:
+            # Check if all payments were credit (which is expected behavior - no payment entries needed)
+            if credit_payments_count > 0 and credit_payments_count == len([p for p in payments_list if float(p.get("amount", 0)) > 0]):
+                # All payments were credit - this is expected, return success
+                return {
+                    "success": True,
+                    "message": f"Credit payment processed successfully for {doctype} {docname}",
+                    "details": f"All payment methods were credit. Total credit amount: {credit_payments_total}. No payment entries created as expected.",
+                    "payment_entry": None,
+                    "credit_payment": True,
+                }
+            
             # Provide more detailed error message with actual errors
             error_details = "No payment entries were created. "
             if not payments_list:
@@ -2945,6 +2976,19 @@ def process_multi_currency_payment_background(customer, payments):
             if paid_amount <= 0:
                 continue
 
+            # Check if payment method is credit - skip payment entry creation for credit methods
+            try:
+                is_credit = is_payment_method_credit(method)
+            except Exception as credit_check_error:
+                frappe.log_error(f"Error checking credit status for {method}: {str(credit_check_error)}", "Credit Check Error")
+                is_credit = False
+            
+            if is_credit:
+                # For credit methods, skip payment entry creation
+                credit_payments_total += paid_amount
+                credit_payments_count += 1
+                continue
+
             original_method = method
             
             mode_exists = frappe.db.exists("Mode of Payment", method) if method else False
@@ -3133,6 +3177,18 @@ def process_multi_currency_payment_background(customer, payments):
             frappe.db.rollback()
 
         if not created_payments:
+            # Check if all payments were credit (which is expected behavior - no payment entries needed)
+            total_valid_payments = len([p for p in payments.items() if float((p[1].get("amount", 0) if isinstance(p[1], dict) else p[1]) or 0) > 0])
+            if credit_payments_count > 0 and credit_payments_count == total_valid_payments:
+                # All payments were credit - this is expected, return success
+                return {
+                    "success": True,
+                    "message": "Credit payment processed successfully",
+                    "details": f"All payment methods were credit. Total credit amount: {credit_payments_total}. No payment entries created as expected.",
+                    "payment_entries": [],
+                    "credit_payment": True,
+                }
+            
             return {
                 "success": False,
                 "message": "Failed to create payment entries",
@@ -3466,6 +3522,9 @@ def make_multi_currency_payment(customer, payments):
 
         # Process each payment (payments format: {key: {mode, currency, amount}})
         # Use same logic as make_payment_for_transaction
+        credit_payments_total = 0  # Track total credit payments
+        credit_payments_count = 0  # Track number of credit payments
+        
         try:
             payments_items = payments.items()
         except (AttributeError, TypeError) as e:
@@ -3494,6 +3553,19 @@ def make_multi_currency_payment(customer, payments):
                 continue
 
             if paid_amount <= 0:
+                continue
+
+            # Check if payment method is credit - skip payment entry creation for credit methods
+            try:
+                is_credit = is_payment_method_credit(method)
+            except Exception as credit_check_error:
+                frappe.log_error(f"Error checking credit status for {method}: {str(credit_check_error)}", "Credit Check Error")
+                is_credit = False
+            
+            if is_credit:
+                # For credit methods, skip payment entry creation
+                credit_payments_total += paid_amount
+                credit_payments_count += 1
                 continue
 
             # Validate mode of payment exists and get default account
@@ -3568,20 +3640,20 @@ def make_multi_currency_payment(customer, payments):
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
             
-            # paid_amount is the amount customer pays in payment currency (mode_account_currency)
+            # paid_amount parameter is the amount customer pays in payment currency (mode_account_currency)
             # For Payment Entry:
-            # - paid_amount should be in paid_from_account_currency (company currency)
-            # - received_amount should be in paid_to_account_currency (payment currency)
+            # - paid_amount should be the currency converted amount (in paid_from_account_currency/company currency)
+            # - received_amount should be the default currency converted amount (in paid_to_account_currency/payment currency)
             
-            # Store original payment amount in payment currency
-            received_amount = paid_amount  # Amount in payment currency (paid_to_account_currency)
+            # Store original payment amount in payment currency for received_amount
+            received_amount = paid_amount  # Amount in payment currency (paid_to_account_currency) - default currency converted amount
             paid_amount_in_company_currency = paid_amount  # Will be converted below
 
-            # Convert payment amount to company currency for paid_amount field
+            # Convert payment amount to company currency for paid_amount field (currency converted amount)
             if paid_from_currency != mode_account_currency:
                 try:
                     from erpnext.setup.utils import get_exchange_rate
-                    # Get rate FROM payment currency TO company currency (same direction as frontend)
+                    # Get rate FROM payment currency TO company currency
                     target_exchange_rate = get_exchange_rate(
                         mode_account_currency, paid_from_currency, frappe.utils.nowdate()
                     )
@@ -3604,8 +3676,8 @@ def make_multi_currency_payment(customer, payments):
                 payment_entry.paid_to = mode_account  # Use default account from Mode of Payment Account
                 payment_entry.paid_from_account_currency = paid_from_currency
                 payment_entry.paid_to_account_currency = mode_account_currency
-                payment_entry.paid_amount = paid_amount_in_company_currency  # Amount in company currency
-                payment_entry.received_amount = received_amount  # Amount in payment currency
+                payment_entry.paid_amount = paid_amount_in_company_currency  # Currency converted amount (in company currency)
+                payment_entry.received_amount = received_amount  # Default currency converted amount (in payment currency)
                 payment_entry.source_exchange_rate = source_exchange_rate
                 payment_entry.target_exchange_rate = target_exchange_rate
                 
@@ -3715,6 +3787,18 @@ def make_multi_currency_payment(customer, payments):
             frappe.db.rollback()
 
         if not created_payments:
+            # Check if all payments were credit (which is expected behavior - no payment entries needed)
+            total_valid_payments = len([p for p in payments.items() if float((p[1].get("amount", 0) if isinstance(p[1], dict) else p[1]) or 0) > 0])
+            if credit_payments_count > 0 and credit_payments_count == total_valid_payments:
+                # All payments were credit - this is expected, return success
+                return {
+                    "success": True,
+                    "message": "Credit payment processed successfully",
+                    "details": f"All payment methods were credit. Total credit amount: {credit_payments_total}. No payment entries created as expected.",
+                    "payment_entries": [],
+                    "credit_payment": True,
+                }
+            
             return {
                 "success": False,
                 "message": "Failed to create payment entries",
@@ -3959,6 +4043,36 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
                 "details": str(inv_error),
             }
         
+        # Check if payment method is credit - if so, commit invoice before creating HA Order
+        is_credit = False
+        try:
+            # Check for credit payment method
+            if payment_method:
+                is_credit = is_payment_method_credit(payment_method)
+            elif payment_breakdown and isinstance(payment_breakdown, list):
+                # Check if any payment in breakdown is credit
+                for p in payment_breakdown:
+                    if isinstance(p, dict) and float(p.get("amount", 0) or 0) > 0:
+                        if is_payment_method_credit(p.get("payment_method")):
+                            is_credit = True
+                            break
+            elif multi_currency_payments and isinstance(multi_currency_payments, dict):
+                # Check if any payment in multi-currency is credit
+                for _, info in multi_currency_payments.items():
+                    if isinstance(info, dict) and float(info.get("amount", 0) or 0) > 0:
+                        if is_payment_method_credit(info.get("mode")):
+                            is_credit = True
+                            break
+        except Exception as credit_check_error:
+            # If credit check fails, log but continue (assume not credit)
+            frappe.log_error(f"Error checking credit status: {str(credit_check_error)}", "Credit Check Error")
+            is_credit = False
+        
+        # For credit payments, commit invoice immediately so it's available when creating HA Order
+        if is_credit:
+            frappe.db.commit()
+            frappe.logger().info(f"Committed invoice {invoice_name} for credit payment before HA Order creation")
+        
         # 2. Process payment entries (try background, fallback to synchronous)
         # Try to enqueue in background first, but if queue fails, process immediately
         payment_processed_async = False
@@ -4067,13 +4181,18 @@ def process_payment_entries(
     """
     frappe.set_user("Administrator")  # Ensure proper permissions in background job
     try:
-        # Verify invoice exists
-        if not frappe.db.exists("Sales Invoice", invoice_name):
-            error_msg = f"Sales Invoice {invoice_name} not found"
+        # Verify invoice exists (Sales Invoice is expected; allow POS Invoice as a fallback)
+        invoice_doctype = None
+        if frappe.db.exists("Sales Invoice", invoice_name):
+            invoice_doctype = "Sales Invoice"
+        elif frappe.db.exists("POS Invoice", invoice_name):
+            invoice_doctype = "POS Invoice"
+        else:
+            error_msg = f"Invoice {invoice_name} not found (neither Sales Invoice nor POS Invoice)"
             frappe.log_error(error_msg, "Process Payment Entries")
             return {
                 "success": False,
-                "message": "Sales invoice not found",
+                "message": "Invoice not found",
                 "details": error_msg,
             }
         
@@ -4148,6 +4267,34 @@ def process_payment_entries(
         order_id = None
         if order_payload:
             try:
+                # Decide whether this is a credit payment (single or multi-payment).
+                # For credit payments we keep HA Order "Open" (not submitted).
+                def is_credit_payment():
+                    try:
+                        # Multi-currency: {key: {mode, currency, amount}}
+                        if multi_currency_payments and isinstance(multi_currency_payments, dict):
+                            for _, info in multi_currency_payments.items():
+                                if isinstance(info, dict) and float(info.get("amount", 0) or 0) > 0:
+                                    if is_payment_method_credit(info.get("mode")):
+                                        return True
+                            return False
+
+                        # Breakdown: [{"payment_method": "...", "amount": ...}, ...]
+                        if payment_breakdown and isinstance(payment_breakdown, list):
+                            for p in payment_breakdown:
+                                if isinstance(p, dict) and float(p.get("amount", 0) or 0) > 0:
+                                    if is_payment_method_credit(p.get("payment_method")):
+                                        return True
+                            return False
+
+                        # Single method
+                        return bool(is_payment_method_credit(payment_method))
+                    except Exception:
+                        # Be safe: default to non-credit if detection fails
+                        return False
+
+                credit_payment = is_credit_payment()
+
                 def safe(value):
                     if not value:
                         return ""
@@ -4174,17 +4321,37 @@ def process_payment_entries(
                     order = frappe.new_doc("HA Order")
                     
                     # Get customer from invoice if not in payload
-                    invoice = frappe.get_doc("Sales Invoice", invoice_name)
-                    customer = invoice.customer
+                    # NOTE: This function can run in the background queue; be defensive about races.
+                    customer = None
+                    try:
+                        invoice = frappe.get_doc(invoice_doctype, invoice_name)
+                        customer = getattr(invoice, "customer", None)
+                    except frappe.DoesNotExistError:
+                        # If invoice isn't visible yet (commit race) or was deleted, continue with payload-only data.
+                        frappe.log_error(
+                            f"Invoice {invoice_name} not found when loading {invoice_doctype} during HA Order creation; continuing without invoice fields",
+                            "Process Payment Entries - Invoice Missing For Order"
+                        )
+                        order_id = None
+                        invoice = None
+                    except Exception as inv_load_error:
+                        frappe.log_error(
+                            f"Error loading invoice {invoice_doctype} {invoice_name} for HA Order creation: {str(inv_load_error)}\n{frappe.get_traceback()}",
+                            "Process Payment Entries - Invoice Load Error"
+                        )
+                        order_id = None
+                        invoice = None
                     
                     order.order_type = safe(order_payload.get("order_type"))
-                    order.customer_name = safe(order_payload.get("customer_name") or customer)
+                    order.customer_name = safe(order_payload.get("customer_name") or customer or "")
                     order.table = safe(order_payload.get("table"))
                     order.waiter = safe(order_payload.get("waiter"))
-                    order.order_status = "Closed"
+                    order.order_status = "Open" if credit_payment else "Closed"
                     # Link to sales invoice to prevent duplicates (if field exists)
                     if hasattr(order, 'sales_invoice'):
-                        order.sales_invoice = invoice_name
+                        # Only link if the invoice record exists (avoid link validation issues)
+                        if frappe.db.exists(invoice_doctype, invoice_name):
+                            order.sales_invoice = invoice_name
                     
                     # Add order items - menu_item is mandatory, so skip items without it
                     for item in order_payload.get("order_items", []):
@@ -4222,7 +4389,7 @@ def process_payment_entries(
                         try:
                             # Try to insert the order
                             order.insert(ignore_permissions=True)
-                            # Submit order if status is Closed
+                            # Submit order only if status is Closed
                             if order.order_status == "Closed" and order.docstatus == 0:
                                 order.submit()
                             order_id = order.name

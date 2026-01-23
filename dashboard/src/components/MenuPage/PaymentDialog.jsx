@@ -187,7 +187,7 @@ export default function PaymentDialog({
           try {
             // const invoiceJson = await get_invoice_json(transactionName);
             console.log("Invoice JSON returned from backend MULTIPLE");
-            window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${transactionName}`, "_blank");
+            window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${transactionName}`, "_blank");
 
             // Convert JSON to string
             const jsonStr = JSON.stringify(invoiceJson, null, 2);
@@ -253,7 +253,7 @@ export default function PaymentDialog({
                 console.log("Table payment processed:", res.sales_invoice);
                 // Print invoice if available
                 if (res.sales_invoice) {
-                  window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+                  window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
                 }
                 // Notify payment success callback AFTER payment is fully complete
                 if (typeof onPaid === "function") {
@@ -287,7 +287,7 @@ export default function PaymentDialog({
               console.log("Payment successful bro:", res.sales_invoice);
               // const invoiceJson = await get_invoice_json(res.sales_invoice);
               // console.log("Invoice JSON returned from backend:", invoiceJson);
-              window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+              window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
               
               // Convert JSON to string
               // const jsonStr = JSON.stringify(invoiceJson, null, 2);

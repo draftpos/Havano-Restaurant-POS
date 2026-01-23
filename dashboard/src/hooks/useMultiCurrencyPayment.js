@@ -79,7 +79,7 @@ function useMultiCurrencyPayment() {
 			setSuccess(true);
 			try {
 				console.log("Fetching invoice JSON for multiple:", res.sales_invoice);
-				window.open(`api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+				window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
 				// const invoiceJson = await get_invoice_json(res.sales_invoice);
 				// // Convert JSON to string
 				// const jsonStr = JSON.stringify(invoiceJson, null, 2);
