@@ -112,7 +112,7 @@ def get_currency_and_exchange_rate(mode_of_payment):
         try:
             from erpnext.setup.utils import get_exchange_rate
             from frappe.utils import nowdate
-            result["exchange_rate"] = get_exchange_rate(account_currency, company_currency, nowdate())
+            result["exchange_rate"] = get_exchange_rate(company_currency, account_currency, nowdate())
         except Exception:
             # Default to 1 if exchange rate not found
             result["exchange_rate"] = 1.0

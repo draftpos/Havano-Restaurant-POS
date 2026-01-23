@@ -962,6 +962,8 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
                     "details": str(order_error),
                 }
 
+        # paid_amount is the amount in company currency (paid_from_currency)
+        # This is the currency converted amount (converted to company currency if payment was in different currency)
         paid_amount = float(amount) if amount is not None else total
         if paid_amount > total:
             paid_amount = total
@@ -969,13 +971,17 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
         # Calculate exchange rates (only if currencies differ)
         source_exchange_rate = 1.0
         target_exchange_rate = 1.0
+        # received_amount should be in paid_to_account_currency (payment method currency)
+        # This is the default currency converted amount (converted to payment currency)
         received_amount = paid_amount
         if paid_from_currency != paid_to_currency:
             try:
                 from erpnext.setup.utils import get_exchange_rate
+                # Get exchange rate from company currency (paid_from) to payment currency (paid_to)
                 target_exchange_rate = get_exchange_rate(
                     paid_from_currency, paid_to_currency, frappe.utils.nowdate()
                 )
+                # Convert paid_amount (in company currency) to payment currency for received_amount
                 received_amount = paid_amount * target_exchange_rate
             except Exception:
                 # Default to 1.0 on error (skip logging for performance)
@@ -1984,14 +1990,18 @@ def process_payment_for_transaction_background(
 
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
+            # paid_amount is in company currency (paid_from_currency) - currency converted amount
+            # received_amount should be in payment currency (paid_to_account_currency) - default currency converted amount
             received_amount = paid_amount
 
             if paid_from_currency != mode_account_currency:
                 try:
                     from erpnext.setup.utils import get_exchange_rate
+                    # Get exchange rate from company currency to payment currency
                     target_exchange_rate = get_exchange_rate(
                         paid_from_currency, mode_account_currency, frappe.utils.nowdate()
                     )
+                    # Convert paid_amount (in company currency) to payment currency for received_amount
                     received_amount = paid_amount * target_exchange_rate
                 except Exception:
                     # Default to 1.0 on error (skip logging for performance)
@@ -3630,20 +3640,20 @@ def make_multi_currency_payment(customer, payments):
             source_exchange_rate = 1.0
             target_exchange_rate = 1.0
             
-            # paid_amount is the amount customer pays in payment currency (mode_account_currency)
+            # paid_amount parameter is the amount customer pays in payment currency (mode_account_currency)
             # For Payment Entry:
-            # - paid_amount should be in paid_from_account_currency (company currency)
-            # - received_amount should be in paid_to_account_currency (payment currency)
+            # - paid_amount should be the currency converted amount (in paid_from_account_currency/company currency)
+            # - received_amount should be the default currency converted amount (in paid_to_account_currency/payment currency)
             
-            # Store original payment amount in payment currency
-            received_amount = paid_amount  # Amount in payment currency (paid_to_account_currency)
+            # Store original payment amount in payment currency for received_amount
+            received_amount = paid_amount  # Amount in payment currency (paid_to_account_currency) - default currency converted amount
             paid_amount_in_company_currency = paid_amount  # Will be converted below
 
-            # Convert payment amount to company currency for paid_amount field
+            # Convert payment amount to company currency for paid_amount field (currency converted amount)
             if paid_from_currency != mode_account_currency:
                 try:
                     from erpnext.setup.utils import get_exchange_rate
-                    # Get rate FROM payment currency TO company currency (same direction as frontend)
+                    # Get rate FROM payment currency TO company currency
                     target_exchange_rate = get_exchange_rate(
                         mode_account_currency, paid_from_currency, frappe.utils.nowdate()
                     )
@@ -3666,8 +3676,8 @@ def make_multi_currency_payment(customer, payments):
                 payment_entry.paid_to = mode_account  # Use default account from Mode of Payment Account
                 payment_entry.paid_from_account_currency = paid_from_currency
                 payment_entry.paid_to_account_currency = mode_account_currency
-                payment_entry.paid_amount = paid_amount_in_company_currency  # Amount in company currency
-                payment_entry.received_amount = received_amount  # Amount in payment currency
+                payment_entry.paid_amount = paid_amount_in_company_currency  # Currency converted amount (in company currency)
+                payment_entry.received_amount = received_amount  # Default currency converted amount (in payment currency)
                 payment_entry.source_exchange_rate = source_exchange_rate
                 payment_entry.target_exchange_rate = target_exchange_rate
                 
