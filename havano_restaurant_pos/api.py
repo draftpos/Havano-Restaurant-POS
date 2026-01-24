@@ -2511,30 +2511,35 @@ def get_invoice_json(invoice_name):
     except Exception as e:
         frappe.throw("Error generating invoice JSON: {0}".format(str(e)))
 
-# @frappe.whitelist()
-# def download_invoice_json(invoice_name):
-#     print("in download function")
-#     data = get_invoice_json(invoice_name)  # reuse your existing function
-#     print(data)
-#     frappe.local.response.filename = f"{invoice_name}.json"
+# @frappe.whitelist(allow_guest=True)
+# def download_invoice_json():
+#     invoice_name = frappe.form_dict.get("name")  # GET param: ?name=ACC-SINV-2026-00129
+#     if not invoice_name:
+#         frappe.throw("Invoice name required")
+
+#     invoice = frappe.get_doc("Sales Invoice", invoice_name)
+#     # ... build data like you already do ...
+#     data = get_invoice_json(invoice_name)
+
+#     frappe.local.response.filename = f"{invoice_name}.txt"
 #     frappe.local.response.filecontent = frappe.as_json(data)
 #     frappe.local.response.type = "download"
 
 @frappe.whitelist(allow_guest=True)
 def download_invoice_json():
-    invoice_name = frappe.form_dict.get("name")  # GET param: ?name=ACC-SINV-2026-00129
+    invoice_name = frappe.form_dict.get("name")  # GET param
     if not invoice_name:
         frappe.throw("Invoice name required")
 
-    invoice = frappe.get_doc("Sales Invoice", invoice_name)
-    # ... build data like you already do ...
+    receipt_type = frappe.form_dict.get("receipt_type") 
+
     data = get_invoice_json(invoice_name)
+    # merge in the receipt type
+    data["ReceiptType"] = receipt_type
 
     frappe.local.response.filename = f"{invoice_name}.txt"
     frappe.local.response.filecontent = frappe.as_json(data)
     frappe.local.response.type = "download"
-
-
 @frappe.whitelist()
 def generate_quotation_json(quote_id):
     # --- Get Invoice ---

@@ -10,6 +10,7 @@ function useMultiCurrencyPayment() {
 	const [success, setSuccess] = useState(false);
 
     let customer = useCartStore((state) => state.customer);
+	const { selectedReceipt } = useCartStore();
     
 
 	const submitPayment = async ({ payments, cartItems, orderPayload }) => {
@@ -79,7 +80,10 @@ function useMultiCurrencyPayment() {
 			setSuccess(true);
 			try {
 				console.log("Fetching invoice JSON for multiple:", res.sales_invoice);
-				window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
+				window.open(
+				`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
+				"_blank"
+				);
 				// const invoiceJson = await get_invoice_json(res.sales_invoice);
 				// // Convert JSON to string
 				// const jsonStr = JSON.stringify(invoiceJson, null, 2);
