@@ -530,6 +530,7 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
                         mode_account = mode_accounts[0].default_account
                 
                 # Create payment entry for non-credit total
+                print("Creating payment entry for non-credit total:1")
                 payment_entry = frappe.new_doc("Payment Entry")
                 payment_entry.payment_type = "Receive"
                 payment_entry.party_type = "Customer"
@@ -601,6 +602,7 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
                         mode_account = mode_accounts[0].default_account
                 
                 # Create payment entry
+                print("Creating payment entry for non-credit total 22",)
                 payment_entry = frappe.new_doc("Payment Entry")
                 payment_entry.payment_type = "Receive"
                 payment_entry.party_type = "Customer"
@@ -2010,8 +2012,24 @@ def process_payment_for_transaction_background(
 
             # Create payment entry
             try:
+                print("payment entry creation started for method:11")
+                try:
+                    user = frappe.session.user
+                    # get latest open shift for user
+                    shift = frappe.get_all(
+                        "HA Shift POS",
+                        filters={"user": user, "status": "Open"},
+                        order_by="shift_start desc",
+                        limit_page_length=1,
+                        fields=["name", "shift_start"]
+                    )
+                except Exception as e:
+                    print("Error fetching shift:", e)
+                    shift = None
+
                 payment_entry = frappe.new_doc("Payment Entry")
                 payment_entry.payment_type = "Receive"
+                payment_entry.custom_shift = shift[0].name if shift else None
                 payment_entry.party_type = "Customer"
                 payment_entry.party = customer
                 payment_entry.company = company
@@ -3808,6 +3826,7 @@ def make_multi_currency_payment(customer, payments):
                         pass
                     
                     # Recreate payment entry
+                    print("creating a payment entry here ----------------------------------------")
                     payment_entry = frappe.new_doc("Payment Entry")
                     payment_entry.payment_type = "Receive"
                     payment_entry.party_type = "Customer"
@@ -4588,6 +4607,7 @@ def process_invoice_and_payment(
             order_payload,
             multi_currency_payments
         )
+        print("Creating payment entry for non-credit total:", non_credit_total)
         
         # Return combined result
         return {

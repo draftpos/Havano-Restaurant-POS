@@ -57,6 +57,7 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction }) => {
 
                     onShiftAction("open", data.message);
                     onOpenChange(false); // close dialog
+                    window.location.reload();
                   } catch (err) {
                     console.error("Failed to open shift:", err);
                     alert("Could not open shift. Check console.");
@@ -68,6 +69,7 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction }) => {
                         console.log("Shift closed:", data);
                         onShiftAction("close", data.message);
                         onOpenChange(false);
+                        window.location.reload();
                     } catch (err) {
                         console.error("Failed to close shift:", err);
                         alert("Could not close shift. Check console.");

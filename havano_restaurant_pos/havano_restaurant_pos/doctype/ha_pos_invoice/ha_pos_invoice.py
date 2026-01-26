@@ -52,7 +52,6 @@ def create_sales_invoice(customer, items, price_list=None):
     try:
                
         last_shift = get_last_open_shift_for_current_user()
-        print("SAVING INVOICE --------------------------")
         print("Price List:", price_list)
         print("Customer:", customer)
         print("Items:", items)

@@ -284,6 +284,7 @@ fixtures = [
                 "Item-custom_is_order_item_4",
                 "Item-custom_is_order_item_5",
                 "Item-custom_is_order_item_6",
+                "Payment Entry-custom_shift",
           
             ]]
         ]
