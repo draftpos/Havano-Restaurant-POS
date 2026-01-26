@@ -2380,6 +2380,27 @@ def item_is_orders(item_name):
     
     return custom_flags
 
+@frappe.whitelist()
+def get_stock(item_code):
+    """
+    Returns the current stock for a given item code.
+    """
+    if not item_code:
+        return {"error": "Item code is required"}
+
+    try:
+        # Replace 'Bin' with your actual stock table if different
+        stock_entry = frappe.db.get_value(
+            "Bin",
+            {"item_code": item_code},
+            ["actual_qty"],
+            as_dict=True
+        )
+        qty = stock_entry.get("actual_qty") if stock_entry else 0
+        return {"item_code": item_code, "stock": qty}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Stock check failed")
+        return {"error": str(e)}
 
 @frappe.whitelist()
 def get_invoice_json(invoice_name):

@@ -665,6 +665,15 @@ export async function closeShift() {
     return message;
   }, "Close shift");
 }
+export async function checkStock(itemName) {
+  return attemptWithRetries(async () => {
+    const { message } = await call.get(
+      "havano_restaurant_pos.api.get_stock",
+      { item_code: itemName } // pass item_name as param
+    );
+    return message;
+  }, `Check stock for ${itemName}`);
+}
 
 export async function getSpecies() {
   try {
