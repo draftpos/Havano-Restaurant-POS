@@ -66,6 +66,7 @@ function useMultiCurrencyPayment() {
 				cleanedPayments // multi_currency_payments
 			);
 
+			console.log("multipayment", cartItems);
 			if (!res?.success) {
 				// Include details in the error message for better debugging
 				const errorMsg = res?.details 

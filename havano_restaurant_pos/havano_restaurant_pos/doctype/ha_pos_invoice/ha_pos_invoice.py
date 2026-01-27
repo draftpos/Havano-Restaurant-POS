@@ -74,7 +74,7 @@ def create_sales_invoice(customer, items, price_list=None):
             "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value("Selling Settings", "selling_price_list"),
             "items": []
         })
-
+        
         # Add items
         for item_data in items:
             invoice.append("items", {
@@ -82,7 +82,9 @@ def create_sales_invoice(customer, items, price_list=None):
                 "qty": item_data.get("qty"),
                 "rate": item_data.get("rate"),
                 "cost_center": defaults.get("cost_center"),
+                "custom_remarks": item_data.get("remarks") or ""
             })
+            print(f"remarls------------: { item_data.get("remarks") }")
 
         invoice.insert(ignore_permissions=True)
         invoice.submit()

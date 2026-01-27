@@ -279,7 +279,7 @@ export default function PaymentDialog({
             fullNote,
             payload
           );
-          console.log("direct-----------------DD--------", res.sales_invoice)
+          console.log("direct-----------------DD--------",cartItems)
           
           // For Dine In orders, no invoice is created, so skip invoice download
           if (res.dine_in_only) {

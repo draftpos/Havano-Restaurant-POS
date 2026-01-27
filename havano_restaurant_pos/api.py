@@ -369,6 +369,8 @@ def get_number_of_orders(menu_item):
 
 @frappe.whitelist()
 def process_table_payment(table, order_ids, total, amount=None, payment_method=None, note=None, payment_breakdown=None):
+
+    print("ITS A HIT")
     """Process payment for all orders in a table.
     
     Creates sales invoice, payment entry, updates HA Orders, submits orders, marks as closed.
@@ -2557,6 +2559,7 @@ def get_invoice_json(invoice_name):
                 "tax_type": getattr(item, "tax_type", "VAT"),
                 "tax_rate": str(getattr(item, "tax_rate", 15.0)),
                 "tax_amount": str(getattr(item, "tax_amount", 0.0)),
+                "remarks": item.get("custom_remarks", ""),
                 **custom_flags  # merge the flags from your function
             })
 
@@ -2641,6 +2644,7 @@ def download_invoice_json():
     frappe.local.response.filename = f"{invoice_name}.txt"
     frappe.local.response.filecontent = frappe.as_json(data)
     frappe.local.response.type = "download"
+
 @frappe.whitelist()
 def generate_quotation_json(quote_id):
     # --- Get Invoice ---
@@ -4049,7 +4053,9 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             item_code = item.get("name") or item.get("item_code") or item.get("item_name")
             qty = item.get("quantity") or item.get("qty") or 1
             rate = item.get("price") or item.get("rate") or 0
-            items.append({"item_code": item_code, "qty": qty, "rate": rate})
+            remarks = item.get("remark")
+            items.append({"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks})
+          
         
         if not items:
             return {
