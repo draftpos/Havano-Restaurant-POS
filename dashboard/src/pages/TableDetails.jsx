@@ -37,12 +37,19 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { db } from "@/lib/frappeClient";
-import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment } from "@/lib/utils";
+import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment, getCurrentUser } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
 import { useTableStore } from "@/stores/useTableStore";
-import { useWaiterStore } from "@/stores/useWaiterStore";
 import { ta } from "zod/v4/locales";
 
 const TableDetails = () => {
@@ -53,6 +60,9 @@ const TableDetails = () => {
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isWaiterNotConfiguredDialogOpen, setIsWaiterNotConfiguredDialogOpen] = useState(false);
+  const [waiters, setWaiters] = useState([]);
+  const [loadingWaiters, setLoadingWaiters] = useState(false);
   const navigate = useNavigate();
   const { id } = useParams();
   const { register, setValue, watch } = useForm({
@@ -62,8 +72,6 @@ const TableDetails = () => {
       remarks: "",
     },
   });
-  const { waiters, loadingWaiters, errorWaiters, fetchWaiters } =
-    useWaiterStore();
 
   const {
     tableOrders,
@@ -72,7 +80,6 @@ const TableDetails = () => {
     fetchTableOrders,
   } = useOrderStore();
 
-  console.log("tableOrders", tableOrders);
   const {
     tableDetails,
     loadingTableDetails,
@@ -91,8 +98,7 @@ const TableDetails = () => {
   useEffect(() => {
     if (!id) return;
     fetchTableOrders(id);
-    fetchWaiters();
-  }, [id, fetchTableOrders, fetchWaiters]);
+  }, [id, fetchTableOrders]);
 
   useEffect(() => {
     const fetchCustomersData = async () => {
@@ -156,10 +162,48 @@ const TableDetails = () => {
   }, [tableDetails, customers, loadingCustomers, setValue]);
 
   useEffect(() => {
-    if (tableDetails?.assigned_waiter) {
-      setValue("waiter", tableDetails.assigned_waiter);
-    } else {
-      setValue("waiter", "");
+    const setWaiterFromUser = async () => {
+      // Always get waiter from logged in user, regardless of table status
+      setLoadingWaiters(true);
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser && currentUser.name) {
+          // Get waiter name from HA Waiter doctype where user matches logged in user
+          const waiterDocs = await db.getDocList("HA Waiter", {
+            fields: ["name", "user", "waiter_name"],
+            filters: {
+              user: currentUser.name
+            }
+          });
+          if (waiterDocs && waiterDocs.length > 0) {
+            // Set the waiter in the select list (only the waiter for logged in user)
+            setWaiters(waiterDocs);
+            // Use the name field from HA Waiter doctype (document name, not waiter_name)
+            // This matches the SelectItem value which uses waiter.name
+            const waiterName = waiterDocs[0].name;
+            setValue("waiter", waiterName, { shouldValidate: true });
+          } else {
+            // No waiter configured for this user
+            setWaiters([]);
+            setValue("waiter", "", { shouldValidate: true });
+            // Show popup message
+            setIsWaiterNotConfiguredDialogOpen(true);
+          }
+        }
+      } catch (err) {
+        console.error("Error getting waiter from user:", err);
+        setWaiters([]);
+        setValue("waiter", "", { shouldValidate: true });
+        // Show popup message on error
+        setIsWaiterNotConfiguredDialogOpen(true);
+      } finally {
+        setLoadingWaiters(false);
+      }
+    };
+    
+    // Set waiter even if table is occupied
+    if (tableDetails) {
+      setWaiterFromUser();
     }
   }, [tableDetails, setValue]);
 
@@ -213,6 +257,27 @@ const TableDetails = () => {
 
     const waiter = watch("waiter");
     if (!waiter) {
+      // Check if user is configured as waiter
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser && currentUser.name) {
+          const waiters = await db.getDocList("HA Waiter", {
+            fields: ["name", "user"],
+            filters: {
+              user: currentUser.name
+            }
+          });
+          
+          if (!waiters || waiters.length === 0) {
+            // User is not configured as waiter, show popup
+            setIsWaiterNotConfiguredDialogOpen(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Error checking waiter configuration:", err);
+      }
+      
       toast.error("Select a waiter before placing an order.");
       return;
     }
@@ -420,11 +485,11 @@ const TableDetails = () => {
                     <div className="space-y-4">
                       <Label>Waiter</Label>
                       <Select
-                        value={watch("waiter")}
+                        value={watch("waiter") || ""}
                         onValueChange={(value) =>
                           setValue("waiter", value, { shouldValidate: true })
                         }
-                        disabled={loadingWaiters}
+                        disabled={loadingWaiters || !!watch("waiter")}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select waiter" />
@@ -447,9 +512,6 @@ const TableDetails = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                      {errorWaiters && (
-                        <p className="text-sm text-red-500">{errorWaiters}</p>
-                      )}
                     </div>
                     <div className="space-y-4">
                       <Label>Remarks</Label>
@@ -566,6 +628,26 @@ const TableDetails = () => {
         transactionDoctype={null}
         transactionName={null}
       />
+      <Dialog
+        open={isWaiterNotConfiguredDialogOpen}
+        onOpenChange={setIsWaiterNotConfiguredDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Waiter Not Configured</DialogTitle>
+            <DialogDescription>
+              No available waiter, please contact admin.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => setIsWaiterNotConfiguredDialogOpen(false)}
+            >
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Container>
   );
 };

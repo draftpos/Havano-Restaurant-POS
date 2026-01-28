@@ -190,6 +190,27 @@ export async function getNumberOfItems(item_group = null) {
   }
 }
 
+export async function isHotelAppInstalled() {
+  try {
+    const { message } = await call.get(
+      "havano_restaurant_pos.api.is_hotel_app_installed"
+    );
+
+    if (typeof message === "boolean") {
+      return message;
+    }
+
+    if (message && typeof message === "object" && "installed" in message) {
+      return Boolean(message.installed);
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Error checking Havano Hotel app installation:", error);
+    return false;
+  }
+}
+
 export async function getNumberOfOrders(menuItem) {
   if (!menuItem) {
     console.warn("getNumberOfOrders called without a menu item identifier.");

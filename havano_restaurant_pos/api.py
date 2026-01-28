@@ -70,6 +70,28 @@ def get_default_customer():
         return None
 
 
+def get_user_mapping_defaults():
+    """Get cost_center and default_warehouse from HA POS Settings User Mapping for logged in user"""
+    user = frappe.session.user
+    
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        if settings.user_mapping:
+            for row in settings.user_mapping:
+                if row.user == user:
+                    return {
+                        "cost_center": row.cost_center if hasattr(row, 'cost_center') else None,
+                        "default_warehouse": row.default_warehouse if hasattr(row, 'default_warehouse') else None,
+                    }
+    except Exception as e:
+        frappe.log_error(f"Error getting user mapping defaults: {str(e)}", "Get User Mapping Defaults Error")
+    
+    return {
+        "cost_center": None,
+        "default_warehouse": None,
+    }
+
+
 @frappe.whitelist()
 def create_customer(customer_name, mobile_no=None):
     """Create a new customer.
@@ -96,6 +118,9 @@ def create_customer(customer_name, mobile_no=None):
                 "customer": existing,
             }
 
+        # Get user mapping defaults (cost_center and default_warehouse)
+        user_defaults = get_user_mapping_defaults()
+
         # Create new customer
         customer = frappe.new_doc("Customer")
         customer.customer_name = customer_name.strip()
@@ -108,6 +133,25 @@ def create_customer(customer_name, mobile_no=None):
             frappe.db.get_single_value("Selling Settings", "territory")
             or "All Territories"
         )
+        
+        # Set custom cost_center and default_warehouse if available from user mapping
+        customer_meta = frappe.get_meta("Customer")
+        
+        if user_defaults.get("cost_center"):
+            cost_center = user_defaults.get("cost_center")
+            # Try custom field first, then regular field
+            if customer_meta.has_field("custom_cost_center"):
+                customer.custom_cost_center = cost_center
+            elif customer_meta.has_field("cost_center"):
+                customer.cost_center = cost_center
+        
+        if user_defaults.get("default_warehouse"):
+            default_warehouse = user_defaults.get("default_warehouse")
+            # Try custom field first, then regular field
+            if customer_meta.has_field("custom_warehouse"):
+                customer.custom_warehouse = default_warehouse
+            elif customer_meta.has_field("warehouse"):
+                customer.default_warehouse = default_warehouse
 
         customer.insert(ignore_permissions=True)
 
@@ -200,6 +244,25 @@ def get_price_lists():
         order_by="name",
     )
     return price_lists
+
+
+@frappe.whitelist()
+def is_hotel_app_installed():
+    """
+    Check if Havano Hotel Management app is installed.
+    Returns simple JSON so it is easy to consume from the POS dashboard.
+    """
+    try:
+        installed = "havano_hotel_management" in frappe.get_installed_apps()
+        return {"installed": installed}
+    except Exception as e:
+        title = "Error checking Havano Hotel Management installation"
+        frappe.log_error(frappe.get_traceback(), title)
+        # Fail-safe: report not installed on error
+        return {
+            "installed": False,
+            "error": str(e),
+        }
 
 
 @frappe.whitelist()
@@ -1219,7 +1282,11 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             order.order_type = safe(payload.get("order_type"))
             order.customer_name = safe(payload.get("customer_name"))
             order.table = safe(payload.get("table"))
-            order.waiter = safe(payload.get("waiter"))
+            # Set waiter from payload, or auto-detect from logged in user if not provided
+            waiter_from_payload = safe(payload.get("waiter"))
+            if not waiter_from_payload:
+                waiter_from_payload = get_waiter_from_user()
+            order.waiter = waiter_from_payload
             order.order_status = "Closed"
             for item in payload.get("order_items", []):
                 order.append(
@@ -1609,7 +1676,11 @@ def convert_quotation_to_sales_invoice_from_cart(
             ha_order.order_type = safe(order_type) or "Take Away"
             ha_order.customer_name = safe(customer_name) or customer
             ha_order.table = safe(table) or ""
-            ha_order.waiter = safe(waiter) or ""
+            # Set waiter from parameter, or auto-detect from logged in user if not provided
+            waiter_from_param = safe(waiter) or ""
+            if not waiter_from_param:
+                waiter_from_param = get_waiter_from_user()
+            ha_order.waiter = waiter_from_param
             ha_order.order_status = "Open"
             ha_order.sales_invoice = sales_invoice_name
 
@@ -1836,7 +1907,11 @@ def create_transaction(
             ha_order.order_type = safe(order_type) or "Take Away"
             ha_order.customer_name = safe(customer_name) or customer
             ha_order.table = safe(table) or ""
-            ha_order.waiter = safe(waiter) or ""
+            # Set waiter from parameter, or auto-detect from logged in user if not provided
+            waiter_from_param = safe(waiter) or ""
+            if not waiter_from_param:
+                waiter_from_param = get_waiter_from_user()
+            ha_order.waiter = waiter_from_param
             ha_order.order_status = "Open"
             ha_order.sales_invoice = doc.name  # Link to Sales Invoice
 
@@ -3080,6 +3155,22 @@ def is_payment_method_credit(payment_method):
         frappe.log_error(f"Error checking payment method credit status: {str(e)}")
         # Return False on error to ensure normal flow continues
         return False
+
+
+def get_waiter_from_user(user=None):
+    """Get HA Waiter name from logged in user"""
+    if not user:
+        user = frappe.session.user
+    
+    if not user or user == "Guest":
+        return None
+    
+    try:
+        waiter_name = frappe.db.get_value("HA Waiter", {"user": user}, "name")
+        return waiter_name
+    except Exception as e:
+        frappe.log_error(f"Error getting waiter from user {user}: {str(e)}")
+        return None
 
 
 @frappe.whitelist()
@@ -4562,34 +4653,6 @@ def process_payment_entries(
         order_id = None
         if order_payload:
             try:
-                # Decide whether this is a credit payment (single or multi-payment).
-                # For credit payments we keep HA Order "Open" (not submitted).
-                def is_credit_payment():
-                    try:
-                        # Multi-currency: {key: {mode, currency, amount}}
-                        if multi_currency_payments and isinstance(multi_currency_payments, dict):
-                            for _, info in multi_currency_payments.items():
-                                if isinstance(info, dict) and float(info.get("amount", 0) or 0) > 0:
-                                    if is_payment_method_credit(info.get("mode")):
-                                        return True
-                            return False
-
-                        # Breakdown: [{"payment_method": "...", "amount": ...}, ...]
-                        if payment_breakdown and isinstance(payment_breakdown, list):
-                            for p in payment_breakdown:
-                                if isinstance(p, dict) and float(p.get("amount", 0) or 0) > 0:
-                                    if is_payment_method_credit(p.get("payment_method")):
-                                        return True
-                            return False
-
-                        # Single method
-                        return bool(is_payment_method_credit(payment_method))
-                    except Exception:
-                        # Be safe: default to non-credit if detection fails
-                        return False
-
-                credit_payment = is_credit_payment()
-
                 def safe(value):
                     if not value:
                         return ""
@@ -4608,9 +4671,22 @@ def process_payment_entries(
                 )
                 
                 if existing_order:
-                    # Order already exists, skip creation
+                    # Order already exists, update it to closed and submit if needed
                     order_id = existing_order
-                    frappe.logger().info(f"HA Order {order_id} already exists for invoice {invoice_name}, skipping creation")
+                    try:
+                        existing_order_doc = frappe.get_doc("HA Order", existing_order)
+                        if existing_order_doc.order_status != "Closed" or existing_order_doc.docstatus == 0:
+                            existing_order_doc.order_status = "Closed"
+                            if existing_order_doc.docstatus == 0:
+                                existing_order_doc.submit()
+                            else:
+                                existing_order_doc.save(ignore_permissions=True)
+                            frappe.logger().info(f"Updated existing HA Order {order_id} to Closed and submitted for invoice {invoice_name}")
+                        else:
+                            frappe.logger().info(f"HA Order {order_id} already exists and is closed for invoice {invoice_name}")
+                    except Exception as update_error:
+                        frappe.log_error(f"Error updating existing HA Order {order_id}: {str(update_error)}\n{frappe.get_traceback()}", "Process Payment Entries - Update Existing Order Error")
+                        frappe.logger().info(f"HA Order {order_id} already exists for invoice {invoice_name}, but update failed")
                 else:
                     # Create new order
                     order = frappe.new_doc("HA Order")
@@ -4640,8 +4716,13 @@ def process_payment_entries(
                     order.order_type = safe(order_payload.get("order_type"))
                     order.customer_name = safe(order_payload.get("customer_name") or customer or "")
                     order.table = safe(order_payload.get("table"))
-                    order.waiter = safe(order_payload.get("waiter"))
-                    order.order_status = "Open" if credit_payment else "Closed"
+                    # Set waiter from payload, or auto-detect from logged in user if not provided
+                    waiter_from_payload = safe(order_payload.get("waiter"))
+                    if not waiter_from_payload:
+                        waiter_from_payload = get_waiter_from_user()
+                    order.waiter = waiter_from_payload
+                    # For is_credit payment method, close and submit the order
+                    order.order_status = "Closed"
                     # Link to sales invoice to prevent duplicates (if field exists)
                     if hasattr(order, 'sales_invoice'):
                         # Only link if the invoice record exists (avoid link validation issues)
@@ -4699,6 +4780,18 @@ def process_payment_entries(
                             if match:
                                 existing_order_name = match.group(1)
                                 order_id = existing_order_name
+                                # Update existing order to closed and submit if needed
+                                try:
+                                    existing_order_doc = frappe.get_doc("HA Order", existing_order_name)
+                                    if existing_order_doc.order_status != "Closed" or existing_order_doc.docstatus == 0:
+                                        existing_order_doc.order_status = "Closed"
+                                        if existing_order_doc.docstatus == 0:
+                                            existing_order_doc.submit()
+                                        else:
+                                            existing_order_doc.save(ignore_permissions=True)
+                                        frappe.logger().info(f"Updated existing HA Order {order_id} to Closed and submitted (from duplicate error)")
+                                except Exception as update_error:
+                                    frappe.log_error(f"Error updating existing HA Order {order_id} from duplicate error: {str(update_error)}", "Process Payment Entries - Update Duplicate Order Error")
                                 frappe.logger().info(f"HA Order {order_id} already exists (found from error), using existing order")
                             else:
                                 frappe.log_error(
