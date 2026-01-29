@@ -290,7 +290,7 @@ export default function MultiCurrencyDialog({
             <div className="flex flex-col h-full">
               <DialogHeader className="mb-3">
                 <DialogTitle className="text-lg font-semibold">
-                  Make Payment
+                  Close Shift
                 </DialogTitle>
                 <DialogDescription className="sr-only">
                   Multi-currency payment dialog
@@ -301,55 +301,7 @@ export default function MultiCurrencyDialog({
                 {/* LEFT PANEL */}
                 <div className="flex-1 bg-gray-50 p-4 rounded-lg">
                   <div className="space-y-4">
-                    <div className="flex justify-between align-center gap-4">
-                      <div className="flex-1 bg-card border-1 rounded-lg p-2">
-                        <p className="text-gray-500 font-bold text-sm">
-                          GRAND TOTAL (BASE)
-                        </p>
-                        <h2 className="text-2xl font-bold">
-                          {formatCurrency(BASE_TOTAL)}
-                        </h2>
-                        <p className="text-gray-500 text-xs">Total Items: 8</p>
-                      </div>
-                      <div
-                        className={cn(
-                          "flex-1 border-1 rounded-lg p-2",
-                          isPaid
-                            ? "bg-green-100 border-green-600"
-                            : "border-red-600 bg-red-100"
-                        )}
-                      >
-                        <p
-                          className={cn(
-                            "font-bold text-sm",
-                            isPaid ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          {isPaid ? "RETURN" : "BALANCE DUE"}
-                        </p>
-                        <h2
-                          className={cn(
-                            "text-2xl font-bold",
-                            isPaid ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          {isPaid
-                            ? formatCurrency(changeBase)
-                            : formatCurrency(remainingBase)}
-                        </h2>
-                        <p
-                          className={cn(
-                            "text-xs",
-                            isPaid ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          {isPaid
-                            ? "Amount to return to customer"
-                            : "Amount still owed by customer"}
-                        </p>
-                      </div>
-                    </div>
-
+                    
                     <>
                       <label className="block text-sm font-medium">
                         Currency Payment Breakdown
@@ -360,10 +312,9 @@ export default function MultiCurrencyDialog({
                           <TableRow>
                             <TableHead>MODE</TableHead>
                             <TableHead>CURRENCY</TableHead>
-                            <TableHead>RATE</TableHead>
-                            <TableHead>AMOUNT DUE</TableHead>
-                            <TableHead>PAID (INPUT)</TableHead>
-                            <TableHead>BASE VAL</TableHead>
+                            <TableHead>EXPECTED</TableHead>
+                            <TableHead>SUBMITTED (INPUT)</TableHead>
+                            <TableHead>VARIANCE</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -376,10 +327,6 @@ export default function MultiCurrencyDialog({
                                 <TableCell className="font-medium">{method.mode}</TableCell>
                                 <TableCell>{method.currency}</TableCell>
                                 <TableCell>{rate.toFixed(4)}</TableCell>
-
-                                <TableCell>
-                                  {getAmountDue(method.key).toFixed(4)}
-                                </TableCell>
 
                                 <TableCell>
                                   <Input
@@ -471,7 +418,6 @@ export default function MultiCurrencyDialog({
                                 cartItems: itemsToUse,
                                 orderPayload: orderPayload,
                               });
-                              console.log("still muilti",paymentData);
                             } catch (err) {
                               // Log error but don't block user (payment already shown as successful)
                               console.error("Payment processing error (background):", err);
@@ -479,7 +425,7 @@ export default function MultiCurrencyDialog({
                           })();
                         })}
                       >
-                        Make Payment
+                        Close Payment
                       </Button>
                     </div>
                   </div>

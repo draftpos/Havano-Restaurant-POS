@@ -5060,3 +5060,50 @@ def can_use_negative_stock():
         return bool(settings.allow_negative_stock)
     except frappe.DoesNotExistError:
         return False  # no settings, treat as False
+
+@frappe.whitelist()
+def save_payments_to_shift(cleaned_payments):
+    """
+    Save multi-currency payments to the open HA Shift POS for the current user.
+    Uses the keys from cleaned_payments (e.g., Cash_USD) as the 'payment_method' in the child table.
+    If the key already exists in shift_amounts, it increments the amount instead of adding a new row.
+    """
+    user = frappe.session.user
+    if not user:
+        frappe.throw("No logged-in user found.")
+
+    # Get the most recent open shift for the logged-in user
+    shift = frappe.get_all(
+        "HA Shift POS",
+        filters={"user": user, "status": "Open"},
+        fields=["name"],
+        limit_page_length=1,
+        order_by="creation desc"
+    )
+
+    if not shift:
+        frappe.throw(f"No open shift found for user {user}.")
+
+    shift_doc = frappe.get_doc("HA Shift POS", shift[0].name)
+
+    for key, payment in cleaned_payments.items():
+        # Check if this key already exists in the child table
+        existing_row = next(
+            (row for row in shift_doc.shift_amounts if row.payment_method == key),
+            None
+        )
+
+        if existing_row:
+            # Increment existing amount
+            existing_row.amount += payment["amount"]
+        else:
+            # Append new row with the key as payment_method
+            shift_doc.append("shift_amounts", {
+                "payment_method": key,  # e.g., Cash_USD
+                "currency": payment["currency"],  # still store currency for reference
+                "amount": payment["amount"]
+            })
+
+    shift_doc.save()
+    frappe.db.commit()
+    frappe.msgprint("Payments saved to shift successfully!")

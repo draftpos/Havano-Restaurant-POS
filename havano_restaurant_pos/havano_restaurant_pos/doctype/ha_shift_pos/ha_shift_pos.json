@@ -10,7 +10,9 @@
   "status",
   "column_break_jpgz",
   "shift_start",
-  "shift_end"
+  "shift_end",
+  "section_break_xjwz",
+  "shift_amounts"
  ],
  "fields": [
   {
@@ -62,12 +64,21 @@
    "fieldtype": "Select",
    "label": "Naming Series",
    "options": "Shift-.YYYY."
+  },
+  {
+   "fieldname": "section_break_xjwz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "shift_amounts",
+   "fieldtype": "Table",
+   "options": "Shift Amounts"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-16 17:01:57.903529",
+ "modified": "2026-01-29 15:22:26.065062",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA Shift POS",

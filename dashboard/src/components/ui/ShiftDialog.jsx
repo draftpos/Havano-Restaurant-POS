@@ -1,8 +1,10 @@
-import React from "react";
-import { openShift , closeShift } from "../../lib/utils";
+import React, { useState } from "react";
+import { openShift } from "../../lib/utils";
+import PaymentDialog from "./MultiCurrencyDialog"; // import your payment modal
 
+const ShiftDialog = ({ open, type, onOpenChange, onShiftAction, cartItems }) => {
+  const [openPayment, setOpenPayment] = useState(false);
 
-const ShiftDialog = ({ open, type, onOpenChange, onShiftAction }) => {
   if (!open) return null;
 
   let title = "";
@@ -11,20 +13,17 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction }) => {
   switch (type) {
     case "open":
       title = "Open Shift";
-      buttons = [
-        { label: "Open Shift", action: "open", color: "green" },
-      ];
+      buttons = [{ label: "Open Shift", action: "open", color: "green" }];
       break;
 
-   case "continue":
-  title = "Shift In Progress";
-  buttons = [
-    { label: "Continue Shift", action: "continue", color: "blue" },
-    { label: "Close Shift", action: "close", color: "red" },
-    { label: "Cancel", action: "cancel", color: "gray" },
-  ];
-  break;
-
+    case "continue":
+      title = "Shift In Progress";
+      buttons = [
+        { label: "Continue Shift", action: "continue", color: "blue" },
+        { label: "Close Shift", action: "close", color: "red" },
+        { label: "Cancel", action: "cancel", color: "gray" },
+      ];
+      break;
 
     case "close":
       title = "Close Shift";
@@ -40,62 +39,66 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction }) => {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div className="bg-white p-6 rounded shadow-lg w-[400px]">
-        <h2 className="text-xl font-bold mb-4">{title}</h2>
-        <div className={`flex ${buttons.length > 1 ? "gap-4" : "justify-center"}`}>
-          {buttons.map((btn) => (
-            <button
-              key={btn.label}
-              onClick={async () => {
-                if (btn.action === "cancel") {
-                  onOpenChange(false);
-                } else if (btn.action === "open") {
-                  try {
-                    const data = await openShift(); // ✅ call the SDK function
-                    console.log("Shift opened:", data);
+    <>
+      {/* Payment Dialog */}
+      <PaymentDialog
+        open={openPayment}
+        onOpenChange={setOpenPayment}
+        onPaid={(data) => {
+          console.log("Payment done:", data);
+          setOpenPayment(false);
+          onOpenChange(false); // close shift dialog too
+        }}
+        cartItems={cartItems}
+      />
 
-                    onShiftAction("open", data.message);
-                    onOpenChange(false); // close dialog
-                    window.location.reload();
-                  } catch (err) {
-                    console.error("Failed to open shift:", err);
-                    alert("Could not open shift. Check console.");
-                  }
-                }
-                else if (btn.action === "close") {
+      {/* Shift Dialog */}
+      <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+        <div className="bg-white p-6 rounded shadow-lg w-[400px]">
+          <h2 className="text-xl font-bold mb-4">{title}</h2>
+          <div className={`flex ${buttons.length > 1 ? "gap-4" : "justify-center"}`}>
+            {buttons.map((btn) => (
+              <button
+                key={btn.label}
+                onClick={async () => {
+                  if (btn.action === "cancel") {
+                    onOpenChange(false);
+                  } else if (btn.action === "open") {
                     try {
-                        const data = await closeShift();
-                        console.log("Shift closed:", data);
-                        onShiftAction("close", data.message);
-                        onOpenChange(false);
-                        window.location.reload();
+                      const data = await openShift();
+                      console.log("Shift opened:", data);
+                      onShiftAction("open", data.message);
+                      onOpenChange(false);
                     } catch (err) {
-                        console.error("Failed to close shift:", err);
-                        alert("Could not close shift. Check console.");
+                      console.error("Failed to open shift:", err);
+                      alert("Could not open shift. Check console.");
                     }
-                    }
-                 else {
-                       onOpenChange(false);
-                  onShiftAction(btn.action, `${btn.label} clicked`);
-                }
-              }}
-              className={`px-4 py-2 rounded font-bold ${
-                btn.color === "green"
-                  ? "bg-green-500 text-white"
-                  : btn.color === "red"
-                  ? "bg-red-500 text-white"
-                  : btn.color === "blue"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-300 text-black"
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
+                  } else if (btn.action === "close") {
+                    // 🔥 Instead of calling closeShift, just open PaymentDialog
+                    // onOpenChange(false);
+                    setOpenPayment(true);
+                  } else {
+                    onOpenChange(false);
+                    onShiftAction(btn.action, `${btn.label} clicked`);
+                  }
+                }}
+                className={`px-4 py-2 rounded font-bold ${
+                  btn.color === "green"
+                    ? "bg-green-500 text-white"
+                    : btn.color === "red"
+                    ? "bg-red-500 text-white"
+                    : btn.color === "blue"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-300 text-black"
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -258,6 +258,7 @@ export default function PaymentDialog({
                 if (res.sales_invoice) {
                   window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
                 }
+                
                 // Notify payment success callback AFTER payment is fully complete
                 if (typeof onPaid === "function") {
                   onPaid({ success: true, message: "Payment successful" });

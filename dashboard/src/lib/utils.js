@@ -688,6 +688,15 @@ export async function negativeStock() {
     return message;
   }, "Can Use Negative Stock");
 }
+export async function savePaymentsToShift(cleanedPayments) {
+  return attemptWithRetries(async () => {
+    const { message } = await call.post(
+      "havano_restaurant_pos.api.save_payments_to_shift",
+      { cleaned_payments: cleanedPayments } // <— must match Python param name
+    );
+    return message;
+  }, "Failed to save payments to shift");
+}
 
 export async function openShift() {
   return attemptWithRetries(async () => {

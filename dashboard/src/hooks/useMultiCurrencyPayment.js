@@ -2,7 +2,7 @@ import { useState } from "react";
 import { call } from "@/lib/frappeClient";
 import { useCartStore } from "@/stores/useCartStore";
 import { getDefaultCustomer } from "@/lib/utils";
-import { createInvoiceAndPaymentQueue, get_invoice_json } from "@/lib/utils";
+import { createInvoiceAndPaymentQueue, get_invoice_json, savePaymentsToShift } from "@/lib/utils";
 
 function useMultiCurrencyPayment() {
 	const [loading, setLoading] = useState(false);
@@ -17,6 +17,7 @@ function useMultiCurrencyPayment() {
 		setLoading(true);
 		setError(null);
 		setSuccess(false);
+
 
 		try {
 			// Validate cart items
@@ -53,6 +54,7 @@ function useMultiCurrencyPayment() {
 			if (Object.keys(cleanedPayments).length === 0) {
 				throw new Error("No valid payments provided. Please enter payment amounts.");
 			}
+			// console.log("mmmmetods" + payments)
 
 			// Create invoice and payment in queue (invoice created first, then payment entries)
 			const res = await createInvoiceAndPaymentQueue(
@@ -65,6 +67,14 @@ function useMultiCurrencyPayment() {
 				orderPayload,
 				cleanedPayments // multi_currency_payments
 			);
+			console.log("clean payments", cleanedPayments);
+
+			try {
+				const result = await savePaymentsToShift(cleanedPayments);
+				console.log("Payments saved to shift:", result);
+			} catch (err) {
+				console.error("Failed to save payments to shift:", err);
+			}
 
 			console.log("multipayment", cartItems);
 			if (!res?.success) {
@@ -81,25 +91,11 @@ function useMultiCurrencyPayment() {
 			setSuccess(true);
 			try {
 				console.log("Fetching invoice JSON for multiple:", res.sales_invoice);
+
 				window.open(
 				`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
 				"_blank"
-				);
-				// const invoiceJson = await get_invoice_json(res.sales_invoice);
-				// // Convert JSON to string
-				// const jsonStr = JSON.stringify(invoiceJson, null, 2);
-				// // Create a blob and download (optimized: async download)
-				// const blob = new Blob([jsonStr], { type: "text/plain" });
-				// const link = document.createElement("a");
-				// link.href = URL.createObjectURL(blob);
-				// link.download = `${res.sales_invoice}.txt`;
-				// document.body.appendChild(link);
-				// link.click();
-				// // Cleanup asynchronously (non-blocking)
-				// setTimeout(() => {
-				// 	document.body.removeChild(link);
-				// 	URL.revokeObjectURL(link.href);
-				// }, 0);
+				)
 			} catch (error) {
 			console.error("Error fetching invoice JSON:", error);
 			// Continue with payment even if JSON fetch fails
@@ -118,7 +114,9 @@ function useMultiCurrencyPayment() {
 		}
 	};
 
+
 	return {
+		
 		submitPayment,
 		loading,
 		error,
