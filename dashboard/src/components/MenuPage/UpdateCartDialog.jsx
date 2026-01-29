@@ -274,11 +274,10 @@ const handleConfirm = handleSubmit(async ({ price, quantity, remark, newRemark }
 <div className="mb-4">
   <label className="block text-sm font-medium mb-1">New Remark</label>
   <div className="flex gap-2">
-    <Textarea
+    <Input
       {...register("newRemark")}
       placeholder="Type a new preparation remark..."
-      rows={4}
-      className="w-full min-h-20 max-w-120"
+      className="w-full max-w-150"
       value={watch("newRemark") || ""}
       onChange={(e) => setValue("newRemark", e.target.value)}
     />
