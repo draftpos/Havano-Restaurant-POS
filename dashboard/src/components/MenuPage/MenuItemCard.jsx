@@ -1,7 +1,7 @@
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { checkStock } from "@/lib/utils";
+import { checkStock, negativeStock } from "@/lib/utils";
 import { toast, Toaster } from "sonner";
 
 import { useMenuContext } from "@/contexts/MenuContext";
@@ -15,12 +15,16 @@ const MenuItemCard = ({ item, index }) => {
   const isActive = currentIndex === index && target === "menu";
 
   const handleAddToCart = async () => {
-  const stockData = await checkStock(item.name);
-  // if (stockData?.stock <= 0) {
-  //     toast.error("Error", { description: `No stock available for ${item.item_name}` });
-  //     console.log("No stock found for", item.item_name);
-  //     return; // stop adding
-  // }
+
+    const stockData = await checkStock(item.name);
+    const allowNegative = await negativeStock(); // fetched once or cached
+
+    if (!allowNegative && stockData?.stock <= 0) {
+      toast.error("Error", { description: `No stock available for ${item.item_name}` });
+      console.log("No stock found for", item.item_name);
+      return; // stop adding
+    }
+
     addToCart({
       name: item.name,
       item_name: item.item_name,

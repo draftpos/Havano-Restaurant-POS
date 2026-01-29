@@ -5028,3 +5028,35 @@ def close_shift():
     frappe.db.commit()
 
     return {"status": "closed", "message": "Shift successfully closed."}
+    
+@frappe.whitelist()
+def is_user_mapped():
+    """
+    Returns True if the logged-in user exists in HA POS Settings -> user_mapping
+    """
+    user = frappe.session.user
+
+    # Get HA POS Settings (assuming single)
+    try:
+        settings = frappe.get_single("HA POS Settings")
+    except frappe.DoesNotExistError:
+        return False  # no settings at all
+
+    # Check the child table
+    for row in settings.user_mapping:
+        # Make sure row.user is a string
+        if isinstance(row.user, str) and row.user == user:
+            return True
+
+    return False
+
+@frappe.whitelist()
+def can_use_negative_stock():
+    """
+    Returns True if HA POS Settings -> allow_negative_stock is checked
+    """
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        return bool(settings.allow_negative_stock)
+    except frappe.DoesNotExistError:
+        return False  # no settings, treat as False

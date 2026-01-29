@@ -682,6 +682,13 @@ export async function getUserSettings() {
   }
 }
 
+export async function negativeStock() {
+  return attemptWithRetries(async () => {
+    const { message } = await call.post("havano_restaurant_pos.api.can_use_negative_stock");
+    return message;
+  }, "Can Use Negative Stock");
+}
+
 export async function openShift() {
   return attemptWithRetries(async () => {
     const { message } = await call.post("havano_restaurant_pos.api.open_shift", {});

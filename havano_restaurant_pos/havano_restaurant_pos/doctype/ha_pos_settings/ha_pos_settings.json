@@ -8,6 +8,7 @@
   "ha_on_pres_enter",
   "default_customer",
   "restaurant_mode",
+  "allow_negative_stock",
   "column_break_rork",
   "default_price_list",
   "default_payment_method",
@@ -78,13 +79,19 @@
    "fieldname": "can_print_invoice",
    "fieldtype": "Check",
    "label": "Can Print Invoice"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_negative_stock",
+   "fieldtype": "Check",
+   "label": "Allow Negative Stock"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-01-20 08:36:39.807997",
+ "modified": "2026-01-29 10:00:14.654836",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA POS Settings",

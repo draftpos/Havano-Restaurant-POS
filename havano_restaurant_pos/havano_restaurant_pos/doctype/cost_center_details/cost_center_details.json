@@ -1,7 +1,6 @@
 {
  "actions": [],
- "allow_rename": 1,
- "autoname": "field : cost_center",
+ "autoname": "field:cost_center",
  "creation": "2026-01-23 17:14:16.292600",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -56,7 +55,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-24 10:55:15.719878",
+ "modified": "2026-01-29 08:42:06.726587",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "Cost Center Details",
