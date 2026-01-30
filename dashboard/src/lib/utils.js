@@ -726,6 +726,22 @@ export async function updateUserShiftPayments(paymentData) {
     return null;
   }, "Failed to update user shift payments");
 }
+export async function getItemUoms(itemName) {
+  return attemptWithRetries(async () => {
+    const { message } = await call.get(
+      "havano_restaurant_pos.api.get_uoms_for_item",
+      { item_name: itemName }
+    );
+
+    if (!message) {
+      console.warn("No UOMs returned for item:", itemName);
+      return [];
+    }
+
+    return message;
+  }, `Failed to fetch UOMs for item ${itemName}`);
+}
+
 export async function openShift() {
   return attemptWithRetries(async () => {
     const { message } = await call.post("havano_restaurant_pos.api.open_shift", {});

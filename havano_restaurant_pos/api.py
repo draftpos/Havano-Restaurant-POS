@@ -5171,3 +5171,23 @@ def update_my_shift_payments(payment_data):
     close_shift()
 
     frappe.msgprint(f"Shift payments updated for user {user}")
+@frappe.whitelist()
+def get_uoms_for_item(item_name: str):
+    """Return all UOMs for a given Item, including stock UOM and alternate UOMs."""
+    item = frappe.get_doc("Item", item_name)
+
+    # Start with stock UOM
+    uoms = []
+    if getattr(item, "stock_uom", None):
+        uoms.append(item.stock_uom)
+
+    # Add alternate UOMs from child table 'uoms'
+    if hasattr(item, "uoms"):
+        uoms += [row.uom for row in item.uoms]
+
+    # Remove duplicates while keeping order
+    seen = set()
+    uoms = [x for x in uoms if not (x in seen or seen.add(x))]
+
+    print("UOMs for", item_name, ":", uoms)
+    return uoms
