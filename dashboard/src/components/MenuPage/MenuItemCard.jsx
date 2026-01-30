@@ -33,34 +33,56 @@ const MenuItemCard = ({ item, index }) => {
 
   const isActive = currentIndex === index && target === "menu";
 
-  const handleAddToCart = async () => {
-    const stockData = await checkStock(item.name);
-    const allowNegative = await negativeStock();
+const handleAddToCart = async () => {
+  const stockData = await checkStock(item.name);
+  const allowNegative = await negativeStock();
 
-    if (!allowNegative && stockData?.stock <= 0) {
-      toast.error("Error", { description: `No stock available for ${item.item_name}` });
-      return;
-    }
+  if (!allowNegative && stockData?.stock <= 0) {
+    toast.error("Error", { description: `No stock available for ${item.item_name}` });
+    return;
+  }
 
-    const existingCartItem = cartItems.find((ci) => ci.name === item.name);
+  const existingCartItem = cartItems.find((ci) => ci.name === item.name);
 
-    if (existingCartItem) {
-      // Already in cart → increment quantity
-      addToCart({
-        ...existingCartItem,
-        quantity: existingCartItem.quantity + 1,
-      });
-      return;
-    }
+  if (existingCartItem) {
+    // Already in cart → increment quantity
+    addToCart({
+      ...existingCartItem,
+      quantity: existingCartItem.quantity + 1,
+    });
+    return;
+  }
 
-    // Not in cart → fetch UOMs dynamically
-    const fetchedUoms = await getItemUoms(item.name);
-    console.log("fetched uoms", fetchedUoms);
+  // Not in cart → fetch UOMs dynamically
+  const fetchedUoms = await getItemUoms(item.name);
+  console.log("fetched uoms", fetchedUoms);
 
-    setPendingItem(item);
-    setDynamicUoms(fetchedUoms); // ✅ pass to modal
-    setShowUomModal(true);
-  };
+  if (!fetchedUoms || fetchedUoms.length === 0) {
+    toast.error(`No UOMs found for ${item.item_name}`);
+    return;
+  }
+
+  if (fetchedUoms.length === 1) {
+    // Only one UOM → add directly
+    addToCart({
+      name: item.name,
+      item_name: item.item_name,
+      custom_menu_category: item.custom_menu_category,
+      quantity: 1,
+      uom: fetchedUoms[0],
+      price: item.standard_rate ?? item.price ?? 0,
+      standard_rate: item.standard_rate ?? item.price ?? 0,
+      remark: "No stock override",
+    });
+    return;
+  }
+
+  // Multiple UOMs → show modal
+  setPendingItem(item);
+  setDynamicUoms(fetchedUoms);
+  setShowUomModal(true);
+};
+
 
   const handleUomSelect = (uom) => {
     if (!pendingItem) return;
