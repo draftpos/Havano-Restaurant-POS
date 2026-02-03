@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 
 import Clock from "@/components/HomePage/Clock";
 import OrdersList from "@/components/HomePage/OrdersList";
-import RoomsModal from "@/components/HomePage/RoomsModal";
 import Container from "@/components/Shared/Container";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +17,6 @@ import {
   getCurrentUserFullName,
   getNumberOfOrders,
   isRestaurantMode,
-  isRoomDirectBookingsEnabled,
 } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useMenuStore } from "@/stores/useMenuStore";
@@ -30,8 +28,6 @@ const Home = () => {
   const [userName, setUserName] = useState(null);
   const [popularItems, setPopularItems] = useState([]);
   const [restModeEnabled, setRestModeEnabled] = useState(false);
-  const [roomBookingsEnabled, setRoomBookingsEnabled] = useState(false);
-  const [showRoomsModal, setShowRoomsModal] = useState(false);
 
 
   useEffect(() => {
@@ -66,23 +62,6 @@ const Home = () => {
       }
     };
     loadRestaurantMode();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadRoomBookings = async () => {
-      try {
-        const enabled = await isRoomDirectBookingsEnabled();
-        if (!cancelled) setRoomBookingsEnabled(Boolean(enabled));
-      } catch (err) {
-        console.error("Failed to load Room Direct Bookings:", err);
-        if (!cancelled) setRoomBookingsEnabled(false);
-      }
-    };
-    loadRoomBookings();
     return () => {
       cancelled = true;
     };
@@ -186,18 +165,6 @@ const Home = () => {
               >
                 TABLES
               </Button>
-              {roomBookingsEnabled && (
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => {
-                    setShowRoomsModal(true);
-                  }}
-                  className="border-primary/30 shadow-sm hover:shadow-md"
-                >
-                  ROOMS
-                </Button>
-              )}
               <Button
                 variant="secondary"
                 size="lg"
@@ -274,7 +241,6 @@ const Home = () => {
           </div>
         </div>
       </Container>
-      <RoomsModal open={showRoomsModal} onOpenChange={setShowRoomsModal} />
     </div>
   );
 };

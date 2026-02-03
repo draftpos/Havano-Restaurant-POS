@@ -280,11 +280,11 @@ def get_booked_rooms():
                 "rooms": []
             }
         
-        # Get occupied and reserved rooms
+        # Get only occupied rooms
         rooms = frappe.get_all(
             "Room",
             filters={
-                "status": ["in", ["Occupied", "Reserved"]]
+                "status": "Occupied"
             },
             fields=[
                 "name",
@@ -329,27 +329,9 @@ def get_booked_rooms():
                 except Exception as e:
                     frappe.log_error(f"Error fetching guest info for {room.current_guest}: {str(e)}")
             
-            # For reserved rooms, try to get guest from reservation
-            elif room.status == "Reserved" and room.reservation:
-                try:
-                    reservation = frappe.get_doc("Reservation", room.reservation)
-                    if reservation.guest_table:
-                        # Get the first guest that should be billed
-                        for guest_row in reservation.guest_table:
-                            if guest_row.to_be_billed:
-                                guest_name = guest_row.guest_name
-                                if guest_name:
-                                    guest = frappe.get_doc("Hotel Guest", guest_name)
-                                    room_data["guest_name"] = guest.guest_name or guest_name
-                                    if guest.guest_customer:
-                                        room_data["customer"] = guest.guest_customer
-                                        customer_name = frappe.db.get_value("Customer", guest.guest_customer, "customer_name")
-                                        room_data["customer_name"] = customer_name or guest.guest_customer
-                                break
-                except Exception as e:
-                    frappe.log_error(f"Error fetching reservation info for {room.reservation}: {str(e)}")
-            
-            enriched_rooms.append(room_data)
+            # Only add rooms that have a customer assigned
+            if room_data["customer"]:
+                enriched_rooms.append(room_data)
         
         return {
             "success": True,

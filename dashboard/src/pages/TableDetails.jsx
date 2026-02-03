@@ -46,10 +46,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { db } from "@/lib/frappeClient";
-import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment, getCurrentUser } from "@/lib/utils";
+import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment, getCurrentUser, isRoomDirectBookingsEnabled } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
 import { useTableStore } from "@/stores/useTableStore";
+import { useRooms } from "@/hooks";
 import { ta } from "zod/v4/locales";
 
 const TableDetails = () => {
@@ -63,6 +64,8 @@ const TableDetails = () => {
   const [isWaiterNotConfiguredDialogOpen, setIsWaiterNotConfiguredDialogOpen] = useState(false);
   const [waiters, setWaiters] = useState([]);
   const [loadingWaiters, setLoadingWaiters] = useState(false);
+  const [roomBookingsEnabled, setRoomBookingsEnabled] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState(null);
   const navigate = useNavigate();
   const { id } = useParams();
   const { register, setValue, watch } = useForm({
@@ -89,6 +92,7 @@ const TableDetails = () => {
   } = useTableStore();
 
   const { startTableOrder, loadCartFromOrder, clearCart } = useCartStore();
+  const { rooms, loading: loadingRooms, fetchRooms } = useRooms();
 
   useEffect(() => {
     if (!id) return;
@@ -118,6 +122,20 @@ const TableDetails = () => {
     };
     fetchCustomersData();
   }, []);
+
+  useEffect(() => {
+    const checkRoomBookings = async () => {
+      const enabled = await isRoomDirectBookingsEnabled();
+      setRoomBookingsEnabled(Boolean(enabled));
+    };
+    checkRoomBookings();
+  }, []);
+
+  useEffect(() => {
+    if (selectedRoom && selectedRoom.customer) {
+      setValue("customerName", selectedRoom.customer, { shouldValidate: true });
+    }
+  }, [selectedRoom, setValue]);
 
   useEffect(() => {
     const setDefaultCustomer = async () => {
@@ -479,9 +497,59 @@ const TableDetails = () => {
                           };
                           refreshCustomers();
                           setValue("customerName", newCustomer.value, { shouldValidate: true });
+                          // Clear room selection when customer is manually changed
+                          if (selectedRoom) {
+                            setSelectedRoom(null);
+                          }
+                        }}
+                        onValueChange={(value) => {
+                          setValue("customerName", value, { shouldValidate: true });
+                          // Clear room selection when customer is manually changed
+                          if (value && selectedRoom) {
+                            setSelectedRoom(null);
+                          }
                         }}
                       />
                     </div>
+                    {roomBookingsEnabled && (
+                      <div className="space-y-4">
+                        <Label>Select Room</Label>
+                        <Combobox
+                          type="room"
+                          options={rooms.map((room) => ({
+                            value: room.name,
+                            name: room.name,
+                            label: `Room ${room.room_number}${room.guest_name ? ` - ${room.guest_name}` : ""}`,
+                            room_number: room.room_number,
+                            customer: room.customer,
+                            customer_name: room.customer_name,
+                          }))}
+                          value={selectedRoom?.name || ""}
+                          onValueChange={(value) => {
+                            if (value) {
+                              const room = rooms.find((r) => r.name === value);
+                              if (room) {
+                                setSelectedRoom(room);
+                                if (room.customer) {
+                                  setValue("customerName", room.customer, { shouldValidate: true });
+                                }
+                              }
+                            } else {
+                              setSelectedRoom(null);
+                            }
+                          }}
+                          placeholder={loadingRooms ? "Loading..." : "Select room"}
+                          searchPlaceholder="Search rooms..."
+                          disabled={loadingRooms}
+                          className="w-full"
+                          onOpenChange={(open) => {
+                            if (open) {
+                              fetchRooms();
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-4">
                       <Label>Waiter</Label>
                       <Select
