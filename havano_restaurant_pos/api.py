@@ -320,7 +320,8 @@ def get_booked_rooms():
             if room.current_guest:
                 try:
                     guest = frappe.get_doc("Hotel Guest", room.current_guest)
-                    room_data["guest_name"] = guest.guest_name or room.current_guest
+                    # Use full_name if available, otherwise use the guest name (which is the document name)
+                    room_data["guest_name"] = getattr(guest, "full_name", None) or room.current_guest
                     if guest.guest_customer:
                         room_data["customer"] = guest.guest_customer
                         # Get customer name
@@ -328,6 +329,8 @@ def get_booked_rooms():
                         room_data["customer_name"] = customer_name or guest.guest_customer
                 except Exception as e:
                     frappe.log_error(f"Error fetching guest info for {room.current_guest}: {str(e)}")
+                    # Continue processing even if guest fetch fails
+                    room_data["guest_name"] = room.current_guest
             
             # Only add rooms that have a customer assigned
             if room_data["customer"]:
