@@ -266,6 +266,106 @@ def is_hotel_app_installed():
 
 
 @frappe.whitelist()
+def get_booked_rooms():
+    """
+    Get all booked/occupied rooms with guest information for POS room selection.
+    Returns rooms that are currently occupied or reserved.
+    """
+    try:
+        # Check if hotel app is installed
+        if "havano_hotel_management" not in frappe.get_installed_apps():
+            return {
+                "success": False,
+                "message": "Havano Hotel Management app is not installed",
+                "rooms": []
+            }
+        
+        # Get occupied and reserved rooms
+        rooms = frappe.get_all(
+            "Room",
+            filters={
+                "status": ["in", ["Occupied", "Reserved"]]
+            },
+            fields=[
+                "name",
+                "room_number",
+                "room_name",
+                "status",
+                "current_guest",
+                "current_checkin",
+                "reservation",
+                "room_type",
+                "floor"
+            ],
+            order_by="room_number"
+        )
+        
+        # Enrich with guest and customer information
+        enriched_rooms = []
+        for room in rooms:
+            room_data = {
+                "name": room.name,
+                "room_number": room.room_number,
+                "room_name": room.room_name or room.room_number,
+                "status": room.status,
+                "room_type": room.room_type,
+                "floor": room.floor,
+                "current_guest": room.current_guest,
+                "guest_name": None,
+                "customer": None,
+                "customer_name": None
+            }
+            
+            # Get guest information if available
+            if room.current_guest:
+                try:
+                    guest = frappe.get_doc("Hotel Guest", room.current_guest)
+                    room_data["guest_name"] = guest.guest_name or room.current_guest
+                    if guest.guest_customer:
+                        room_data["customer"] = guest.guest_customer
+                        # Get customer name
+                        customer_name = frappe.db.get_value("Customer", guest.guest_customer, "customer_name")
+                        room_data["customer_name"] = customer_name or guest.guest_customer
+                except Exception as e:
+                    frappe.log_error(f"Error fetching guest info for {room.current_guest}: {str(e)}")
+            
+            # For reserved rooms, try to get guest from reservation
+            elif room.status == "Reserved" and room.reservation:
+                try:
+                    reservation = frappe.get_doc("Reservation", room.reservation)
+                    if reservation.guest_table:
+                        # Get the first guest that should be billed
+                        for guest_row in reservation.guest_table:
+                            if guest_row.to_be_billed:
+                                guest_name = guest_row.guest_name
+                                if guest_name:
+                                    guest = frappe.get_doc("Hotel Guest", guest_name)
+                                    room_data["guest_name"] = guest.guest_name or guest_name
+                                    if guest.guest_customer:
+                                        room_data["customer"] = guest.guest_customer
+                                        customer_name = frappe.db.get_value("Customer", guest.guest_customer, "customer_name")
+                                        room_data["customer_name"] = customer_name or guest.guest_customer
+                                break
+                except Exception as e:
+                    frappe.log_error(f"Error fetching reservation info for {room.reservation}: {str(e)}")
+            
+            enriched_rooms.append(room_data)
+        
+        return {
+            "success": True,
+            "rooms": enriched_rooms
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Error fetching booked rooms for POS")
+        return {
+            "success": False,
+            "message": str(e),
+            "rooms": []
+        }
+
+
+@frappe.whitelist()
 def search_items(search_term=None):
     """Search for items by name or code"""
     filters = {"disabled": 0}
@@ -682,9 +782,7 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
                 "item_code": item["menu_item"],
                 "qty": item["qty"],
                 "rate": item["rate"],
-            })
-            print(f"the item uom: -----------------------------------------{item["qty"],}")
-        
+            })        
         inv = create_sales_invoice(customer, invoice_items)
         invoice_name = inv.get("name") if isinstance(inv, dict) else inv
         
@@ -992,13 +1090,7 @@ def mark_table_as_paid(table):
 
 @frappe.whitelist()
 def create_order_and_payment(payload, amount=None, payment_method=None, note=None):
-    print("creating sales invoice on anotherfuncion 222222222222222--------------------------")
-    """Create order, create sales invoice and create a payment entry in one call.
-    Optimized for performance with batched commits and cached lookups.
-
-    Expects `payload` (dict or JSON string) which matches create_order_from_cart payload.
-    Optional `amount` will be used as the paid amount for Payment Entry; otherwise invoice total is used.
-    """
+    
 
     try:
         if isinstance(payload, str):
@@ -1014,7 +1106,6 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             qty = item.get("quantity") or item.get("qty") or 1
             rate = item.get("price") or item.get("rate") or 0
             items.append({"item_code": item_code, "qty": qty, "rate": rate})
-            print(f"the item uom: -----------------------------------------{item["qty"],}")
             try:
                 total += float(qty) * float(rate)
             except Exception:
@@ -4310,9 +4401,7 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             rate = item.get("price") or item.get("rate") or 0
             remarks = item.get("remark")
             uom={item.get("uom")}
-            items.append({"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks, "uom": uom})
-            print(f"--------------------The UOM for the otem is {item.get("uom")}")
-          
+            items.append({"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks, "uom": uom})          
         
         if not items:
             return {
@@ -5162,7 +5251,7 @@ def update_my_shift_payments(payment_data):
     for row in shift_doc.shift_amounts:
         # find matching entry from JS tableData
         match = next(
-            (item for item in payment_data if f"{item["mode"]}_{item["currency"]}" == row.payment_method),
+            (item for item in payment_data if f"{item['mode']}_{item['currency']}" == row.payment_method),
             None
         )
         if match:
