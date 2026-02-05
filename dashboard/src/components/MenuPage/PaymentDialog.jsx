@@ -134,6 +134,7 @@ export default function PaymentDialog({
   const paymentStatus = useMemo(() => {
     const paid = sumPayments();
     const diff = paid - total;
+    console.log(diff);
     return {
       paid,
       diff,
@@ -143,6 +144,7 @@ export default function PaymentDialog({
   }, [paymentAmounts, total]);
 
   async function handlePay (){
+    const change = paymentStatus.diff > 0 ? paymentStatus.diff : 0;
     let paidTotal = sumPayments();
     
     // Get payment breakdown for multiple methods (optimized: single pass)
@@ -219,7 +221,9 @@ export default function PaymentDialog({
             paidTotal > 0 ? paidTotal : null,
             payment_method,
             fullNote,
-            paymentBreakdown.length > 0 ? paymentBreakdown : null
+            paymentBreakdown.length > 0 ? paymentBreakdown : null,
+            change
+
           );
         } else {
           // Check if this is a table payment (has table_orders in payload)
@@ -249,7 +253,8 @@ export default function PaymentDialog({
                 paidTotal > 0 ? paidTotal : null,
                 paymentBreakdown.length === 1 ? payment_method : null,
                 fullNote,
-                paymentBreakdown.length > 0 ? paymentBreakdown : null
+                paymentBreakdown.length > 0 ? paymentBreakdown : null,
+                change
               );
               
               if (res && res.success) {
@@ -278,10 +283,16 @@ export default function PaymentDialog({
             paymentBreakdown.length === 1 ? payment_method : null,
             paidTotal > 0 ? paidTotal : null,
             fullNote,
-            payload
+            payload,
+            null,  // <--- multiCurrencyPayments placeholder
+            change
           );
+
+
+
+    
           console.log("direct-----------------DD--------",cartItems)
-          
+
           // For Dine In orders, no invoice is created, so skip invoice download
           if (res.dine_in_only) {
             console.log("Dine In order created successfully:", res.order_id);
@@ -289,26 +300,10 @@ export default function PaymentDialog({
           } else if (res.sales_invoice) {
             try {
               console.log("Payment successful bro:", res.sales_invoice);
-              // const invoiceJson = await get_invoice_json(res.sales_invoice);
-              // console.log("Invoice JSON returned from backend:", invoiceJson);
                 window.open(
               `/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
               "_blank")
               
-              // Convert JSON to string
-              // const jsonStr = JSON.stringify(invoiceJson, null, 2);
-              // // Create a blob and download (optimized: async download)
-              // const blob = new Blob([jsonStr], { type: "text/plain" });
-              // const link = document.createElement("a");
-              // link.href = URL.createObjectURL(blob);
-              // link.download = `${res.sales_invoice}.txt`;
-              // document.body.appendChild(link);
-              // link.click();
-              // // Cleanup asynchronously (non-blocking)
-              // setTimeout(() => {
-              //   document.body.removeChild(link);
-              //   URL.revokeObjectURL(link.href);
-              // }, 0);
             } catch (error) {
               console.error("Error fetching invoice JSON:", error);
               // Continue with payment even if JSON fetch fails

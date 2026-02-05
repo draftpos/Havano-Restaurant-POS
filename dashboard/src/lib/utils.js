@@ -571,8 +571,11 @@ export async function createInvoiceAndPaymentQueue(
   amount = null,
   note = null,
   orderPayload = null,
-  multiCurrencyPayments = null
+  multiCurrencyPayments = null,
+  change = null
 ) {
+  console.log("💸 change value about to be sent:", change); 
+
   return attemptWithRetries(
     async () => {
       const { message } = await call.post(
@@ -584,15 +587,18 @@ export async function createInvoiceAndPaymentQueue(
           payment_method: paymentMethod,
           amount,
           note,
+          change,
           order_payload: orderPayload,
-          multi_currency_payments: multiCurrencyPayments,
+          multi_currency_payments: multiCurrencyPayments
         }
       );
+      
       return message;
     },
     "Create invoice and payment"
   );
 }
+
 
 /**
  * Convert a Quotation to Sales Invoice.
