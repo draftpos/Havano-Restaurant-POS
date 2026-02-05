@@ -2899,7 +2899,7 @@ def get_invoice_json(invoice_name):
             "CustomerVAT": getattr(invoice, "vat_number", None),
             "Customeraddress": invoice.customer_address or None,
             "itemlist": items,
-            "AmountTendered": str(invoice.paid_amount),
+            "AmountTendered": str(  flt(invoice.grand_total) + invoice.custom_change ),
             "Change": invoice.custom_change,
             "Currency": invoice.currency,
             "Footer": "Thank you for your purchase!",
