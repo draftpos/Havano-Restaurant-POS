@@ -2824,7 +2824,7 @@ def get_invoice_json(invoice_name):
             "Customeraddress": invoice.customer_address or None,
             "itemlist": items,
             "AmountTendered": str(invoice.paid_amount),
-            "Change": str(invoice.outstanding_amount),
+            "Change": invoice.custom_change,
             "Currency": invoice.currency,
             "Footer": "Thank you for your purchase!",
             "MultiCurrencyDetails": [
@@ -2852,19 +2852,6 @@ def get_invoice_json(invoice_name):
     except Exception as e:
         frappe.throw("Error generating invoice JSON: {0}".format(str(e)))
 
-# @frappe.whitelist(allow_guest=True)
-# def download_invoice_json():
-#     invoice_name = frappe.form_dict.get("name")  # GET param: ?name=ACC-SINV-2026-00129
-#     if not invoice_name:
-#         frappe.throw("Invoice name required")
-
-#     invoice = frappe.get_doc("Sales Invoice", invoice_name)
-#     # ... build data like you already do ...
-#     data = get_invoice_json(invoice_name)
-
-#     frappe.local.response.filename = f"{invoice_name}.txt"
-#     frappe.local.response.filecontent = frappe.as_json(data)
-#     frappe.local.response.type = "download"
 
 @frappe.whitelist(allow_guest=True)
 def download_invoice_json():
@@ -4291,6 +4278,7 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             note = payload.get("note")
             order_payload = payload.get("order_payload")
             multi_currency_payments = payload.get("multi_currency_payments")
+
         else:
             # Use kwargs (from frontend POST body)
             cart_items = kwargs.get("cart_items", [])
@@ -4303,6 +4291,9 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             multi_currency_payments = kwargs.get("multi_currency_payments")
         
         # Prepare items for sales invoice
+        change = (payload.get("change") if payload else None) or frappe.form_dict.get("change")
+        print(f"--------change111--------------{change}")
+       
         items = []
         for item in cart_items or []:
             item_code = item.get("name") or item.get("item_code") or item.get("item_name")
@@ -4415,7 +4406,7 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
         )
         
         try:
-            inv = create_sales_invoice(customer, items)
+            inv = create_sales_invoice(customer, items, change= change)
             invoice_name = inv.get("name") if isinstance(inv, dict) else inv
             
             if not invoice_name:

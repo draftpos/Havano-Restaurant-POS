@@ -44,7 +44,7 @@ def get_last_open_shift_for_current_user():
  
 
 @frappe.whitelist()
-def create_sales_invoice(customer, items, price_list=None):
+def create_sales_invoice(customer, items, price_list=None,change=None):
     """Create a new sales invoice"""
     import json
     import frappe
@@ -55,6 +55,7 @@ def create_sales_invoice(customer, items, price_list=None):
         print("Price List:", price_list)
         print("Customer:", customer)
         print("Items:", items)
+        print("Change:", change)
 
         defaults = get_pos_user_defaults()
         if not defaults:
@@ -72,6 +73,7 @@ def create_sales_invoice(customer, items, price_list=None):
             "cost_center": defaults.get("cost_center"),
             "custom_shift_number": last_shift or "",
             "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value("Selling Settings", "selling_price_list"),
+            "custom_change": change,
             "items": []
         })
         
