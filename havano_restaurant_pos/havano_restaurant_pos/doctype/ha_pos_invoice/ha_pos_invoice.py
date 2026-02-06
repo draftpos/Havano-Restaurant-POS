@@ -41,55 +41,82 @@ def get_last_open_shift_for_current_user():
         return shift[0]  # Last open shift
     else:
         return None      # No open shift found
- 
 
 @frappe.whitelist()
-def create_sales_invoice(customer, items, price_list=None,change=None):
-    """Create a new sales invoice"""
+def create_sales_invoice(customer, items, price_list=None, change=None, multi_currency_payments=None):
+    """
+    Create a Sales Invoice dynamically, handling single or multiple currencies.
+    Converts item rates if using a single foreign currency; defaults to USD if multiple currencies.
+    """
     import json
     import frappe
 
     try:
-               
+        # --- Get last open shift ---
         last_shift = get_last_open_shift_for_current_user()
-        print("Price List:", price_list)
-        print("Customer:", customer)
-        print("Items:", items)
-        print("Change:", change)
 
+        # --- Get POS user defaults ---
         defaults = get_pos_user_defaults()
         if not defaults:
             frappe.throw("Logged-in user is not mapped in HA POS Settings")
 
-        print("Cost center:", defaults.get("cost_center"))
-
-        # Parse items if it's a JSON string (might come as string from JS)
+        # --- Parse items if JSON string ---
         if isinstance(items, str):
             items = json.loads(items)
 
+        # --- Determine invoice currency and conversion rate ---
+        currency = 'USD'
+        conversion_rate = 1.0
+
+        if multi_currency_payments and isinstance(multi_currency_payments, dict):
+            if len(multi_currency_payments) == 1:
+                # Single currency payment → use its currency and rate
+                only_payment = list(multi_currency_payments.values())[0]
+                currency = only_payment.get('currency', 'USD')
+                conversion_rate = float(only_payment.get('rate', 1.0))
+            else:
+                # Multiple currencies → keep default USD
+                currency = 'USD'
+                conversion_rate = 1.0
+
+        # --- Create invoice doc ---
         invoice = frappe.get_doc({
             "doctype": "Sales Invoice",
             "customer": customer,
             "cost_center": defaults.get("cost_center"),
             "custom_shift_number": last_shift or "",
-            "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value("Selling Settings", "selling_price_list"),
+            "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value(
+                "Selling Settings", "selling_price_list"
+            ),
             "custom_change": change,
+            "currency": currency,
+            "conversion_rate": conversion_rate,
             "items": []
         })
-        
-        # Add items
+
+        # --- Add items with proper conversion ---
         for item_data in items:
             uom = item_data.get('uom')
             if isinstance(uom, set):
-                uom = next(iter(uom))  # get the first item from the set
+                uom = next(iter(uom))
+
+            rate = float(item_data.get("rate") or 0)
+            qty = float(item_data.get("qty") or 1)
+
+            # Convert rate if invoice currency is not USD
+            if currency != 'USD':
+                rate = rate * conversion_rate
+
             invoice.append("items", {
                 "item_code": item_data.get("item_code"),
-                "qty": item_data.get("qty"),
-                "rate": item_data.get("rate"),
+                "qty": qty,
+                "rate": rate,
                 "cost_center": defaults.get("cost_center"),
                 "custom_remarks": item_data.get("remarks") or "",
                 "uom": uom
             })
+
+        # --- Insert and submit invoice ---
         invoice.insert(ignore_permissions=True)
         invoice.submit()
 
@@ -97,7 +124,8 @@ def create_sales_invoice(customer, items, price_list=None,change=None):
             "success": True,
             "name": invoice.name,
             "total": invoice.grand_total,
-            "posting_date": invoice.posting_date
+            "posting_date": invoice.posting_date,
+            "currency": invoice.currency
         }
 
     except Exception as e:
@@ -107,7 +135,6 @@ def create_sales_invoice(customer, items, price_list=None,change=None):
             msg=str(e),
             indicator="red"
         )
-
         return {
             "success": False,
             "error": str(e)

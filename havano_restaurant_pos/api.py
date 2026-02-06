@@ -4289,10 +4289,9 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             note = kwargs.get("note")
             order_payload = kwargs.get("order_payload")
             multi_currency_payments = kwargs.get("multi_currency_payments")
-        
         # Prepare items for sales invoice
         change = (payload.get("change") if payload else None) or frappe.form_dict.get("change")
-        print(f"--------change111--------------{change}")
+
        
         items = []
         for item in cart_items or []:
@@ -4406,7 +4405,7 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
         )
         
         try:
-            inv = create_sales_invoice(customer, items, change= change)
+            inv = create_sales_invoice(customer, items, change=change,multi_currency_payments=multi_currency_payments,)
             invoice_name = inv.get("name") if isinstance(inv, dict) else inv
             
             if not invoice_name:
