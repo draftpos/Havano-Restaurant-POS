@@ -2716,24 +2716,64 @@ def item_is_orders(item_name):
 @frappe.whitelist()
 def get_stock(item_code):
     """
-    Returns the current stock for a given item code.
+    Returns stock for an item using its default warehouse
+    (Item → item_defaults → default_warehouse)
     """
     if not item_code:
         return {"error": "Item code is required"}
 
     try:
-        # Replace 'Bin' with your actual stock table if different
+        print("🔍 Loading Item:", item_code)
+
+        item = frappe.get_doc("Item", item_code)
+
+        print("📄 Item loaded")
+        print("🔢 item_defaults rows:", len(item.item_defaults))
+
+        # Deduplicate warehouses
+        warehouses = []
+        for row in item.item_defaults:
+            print("➡ Row:")
+            print("   Company:", row.company)
+            print("   Default Warehouse:", row.default_warehouse)
+
+            if row.default_warehouse and row.default_warehouse not in warehouses:
+                warehouses.append(row.default_warehouse)
+
+        print("📦 Warehouses found:", warehouses)
+
+        if not warehouses:
+            return {
+                "item_code": item_code,
+                "stock": 0,
+                "warehouse": None
+            }
+
+        warehouse = warehouses[0]
+        print("✅ Using warehouse:", warehouse)
+
         stock_entry = frappe.db.get_value(
             "Bin",
-            {"item_code": item_code},
-            ["actual_qty"],
-            as_dict=True
-        )
-        qty = stock_entry.get("actual_qty") if stock_entry else 0
-        return {"item_code": item_code, "stock": qty}
+            {
+                "item_code": item_code,
+                "warehouse": warehouse
+            },
+            "actual_qty")
+
+        qty = stock_entry or 0
+
+        print("📊 Stock found:", qty)
+
+        return {
+            "item_code": item_code,
+            "warehouse": warehouse,
+            "stock": qty
+        }
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Stock check failed")
         return {"error": str(e)}
+
 import frappe
 from frappe import _
 
