@@ -4340,7 +4340,6 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             remarks = item.get("remark")
             uom={item.get("uom")}
             items.append({"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks, "uom": uom})
-            print(f"--------------------The UOM for the otem is {item.get("uom")}")
           
         
         if not items:
