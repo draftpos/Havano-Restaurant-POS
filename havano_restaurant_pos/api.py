@@ -1014,7 +1014,6 @@ def create_order_and_payment(payload, amount=None, payment_method=None, note=Non
             qty = item.get("quantity") or item.get("qty") or 1
             rate = item.get("price") or item.get("rate") or 0
             items.append({"item_code": item_code, "qty": qty, "rate": rate})
-            print(f"the item uom: -----------------------------------------{item["qty"],}")
             try:
                 total += float(qty) * float(rate)
             except Exception:
