@@ -12,3 +12,4 @@ export {default as useCreateProductBundle} from './useCreateProductBundle';
 export {default as useItemPreparationRemark} from './useItemPreparationRemark';
 export {default as useCurrencyExchange} from './useCurrencyExchange';
 export {default as useMultiCurrencyPayment} from './useMultiCurrencyPayment';
+export {default as useRooms} from './useRooms';

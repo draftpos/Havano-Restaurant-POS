@@ -23,7 +23,7 @@ import { useMenuStore } from "@/stores/useMenuStore";
 
 const Home = () => {
   const navigate = useNavigate();
-  const { startNewTakeAwayOrder, addToCart, clearCart } = useCartStore();
+  const { startNewTakeAwayOrder, addToCart } = useCartStore();
   const { menuItems, fetchMenuItems } = useMenuStore();
   const [userName, setUserName] = useState(null);
   const [popularItems, setPopularItems] = useState([]);
@@ -54,7 +54,7 @@ const Home = () => {
     const loadRestaurantMode = async () => {
       try {
         const enabled = await isRestaurantMode();
-        console.log("enabled", enabled);
+        // console.log("enabled", enabled);
         if (!cancelled) setRestModeEnabled(Boolean(enabled));
       } catch (err) {
         console.error("Failed to load Restaurant Mode:", err);
@@ -114,7 +114,6 @@ const Home = () => {
     }
 
     startNewTakeAwayOrder();
-    clearCart();
     addToCart({
       ...item,
       quantity: 1,
@@ -149,9 +148,9 @@ const Home = () => {
                 size="lg"
                 onClick={() => {
                   if (!restModeEnabled) {
-                    console.info(
-                      "[HA POS] Dine In clicked, but Restaurant Mode is disabled in HA POS Settings."
-                    );
+                    // console.info(
+                    //   "[HA POS] Dine In clicked, but Restaurant Mode is disabled in HA POS Settings."
+                    // );
                     return;
                   }
                   navigate("/tables");
@@ -163,7 +162,7 @@ const Home = () => {
                 }
                 className={!restModeEnabled ? "opacity-50 cursor-not-allowed" : ""}
               >
-                DINE IN
+                TABLES
               </Button>
               <Button
                 variant="secondary"
@@ -189,7 +188,7 @@ const Home = () => {
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>Popular Menu Items</CardTitle>
                 <CardAction>
-                  <Button variant="link" onClick={() => {clearCart(); navigate("/menu")}}>
+                  <Button variant="link" onClick={() => navigate("/menu")}>
                     View All
                   </Button>
                 </CardAction>

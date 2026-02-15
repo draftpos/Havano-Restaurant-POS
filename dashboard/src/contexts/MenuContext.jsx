@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
 import { useCartStore } from "@/stores/useCartStore";
 import { useMenuStore } from "@/stores/useMenuStore";
+import { negativeStock } from "@/lib/utils";
 import {
   useCustomers,
   useTransactionTypes,
@@ -17,7 +18,20 @@ export function MenuProvider({ children }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [target, setTarget] = useState("menu");
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [allowNegativeStock, setAllowNegativeStock] = useState(null);
   const { menuItems, fetchMenuItems, menuCategories, fetchMenuCategories } = useMenuStore();
+
+  useEffect(() => {
+    let cancelled = false;
+    negativeStock()
+      .then((value) => {
+        if (!cancelled) setAllowNegativeStock(Boolean(value));
+      })
+      .catch(() => {
+        if (!cancelled) setAllowNegativeStock(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
 
   const menuGridRef = useRef(null);
@@ -139,6 +153,7 @@ export function MenuProvider({ children }) {
         selectedAgent,
         setSelectedAgent,
         menuGridRef,
+        allowNegativeStock,
       }}
     >
       {children}

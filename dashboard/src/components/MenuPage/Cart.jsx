@@ -410,19 +410,21 @@ const Cart = () => {
                    <div
                      key={item.name}
                      className={cn(
-                       "flex justify-between bg-secondary-background p-2 rounded",
+                       "flex justify-between gap-2 bg-secondary-background p-2 rounded min-w-0",
                        isActive && "border-2 border-primary bg-primary/10"
                      )}
                    >
-                     <div className="flex gap-4 font-bold">
-                       <p>x{item.quantity}</p>
-                       <p className="max-w-30 truncate">{item.item_name || item.name}</p>
-                       <i>
+                     <div className="flex gap-2 font-bold min-w-0 flex-1 text-sm">
+                       <p className="shrink-0">x{item.quantity}</p>
+                       <p className="min-w-0 flex-1 break-words whitespace-normal text-xs">
+                         {item.item_name || item.name}
+                       </p>
+                       <i className="shrink-0">
                          {formatCurrency(item.price ?? item.standard_rate ?? 0)}
                        </i>
                      </div>
 
-                     <div className="flex">
+                     <div className="flex shrink-0">
                        <Trash2
                          onClick={() => removeFromCart(item)}
                          className="cursor-pointer text-red-600"

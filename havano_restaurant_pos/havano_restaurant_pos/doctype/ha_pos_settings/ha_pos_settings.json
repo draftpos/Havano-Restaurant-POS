@@ -4,11 +4,12 @@
  "creation": "2025-12-27 14:03:09.775647",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
+  "field_order": [
   "ha_on_pres_enter",
   "default_customer",
   "restaurant_mode",
   "allow_negative_stock",
+  "enable_room_direct_bookings",
   "column_break_rork",
   "default_price_list",
   "default_payment_method",
@@ -85,6 +86,12 @@
    "fieldname": "allow_negative_stock",
    "fieldtype": "Check",
    "label": "Allow Negative Stock"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_room_direct_bookings",
+   "fieldtype": "Check",
+   "label": "Enable Room Direct Bookings"
   }
  ],
  "grid_page_length": 50,

@@ -362,6 +362,25 @@ export async function isRestaurantMode() {
   
 }
 
+export async function isRoomDirectBookingsEnabled() {
+  try {
+    const { message } = await db.getSingleValue(
+      "HA POS Settings",
+      "enable_room_direct_bookings"
+    );
+    if (message && typeof message === "object") {
+      return Boolean(message.enable_room_direct_bookings);
+    }
+    if (typeof message === "string") {
+      return Boolean(Number(message));
+    }
+    return Boolean(message);
+  } catch (err) {
+    console.error("Error fetching HA POS Settings.enable_room_direct_bookings:", err);
+    return false;
+  }
+}
+
 /**
  * Get user transaction type mappings from HA POS Setting
  * Returns array of transaction types available for the current user
@@ -689,7 +708,8 @@ export async function getUserSettings() {
 }
 export async function negativeStock() {
   return attemptWithRetries(async () => {
-    const { message } = await call.post("havano_restaurant_pos.api.can_use_negative_stock");
+    // Use GET to avoid CSRF requirement (read-only check)
+    const { message } = await call.get("havano_restaurant_pos.api.can_use_negative_stock");
     return message;
   }, "Can Use Negative Stock");
 }

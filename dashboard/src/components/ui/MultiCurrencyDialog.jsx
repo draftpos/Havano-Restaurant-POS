@@ -52,7 +52,6 @@ export default function MultiCurrencyDialog({
   const itemsToUse = useMemo(() => {
     const items = cartItems && cartItems.length > 0 ? cartItems : cartStoreItems;
     if (!items || items.length === 0) {
-      console.warn("MultiCurrencyDialog: No cart items found", { cartItems, cartStoreItems });
       return [];
     }
     // Ensure items are in the correct format for the API
@@ -65,7 +64,7 @@ export default function MultiCurrencyDialog({
       price: item.price || item.rate || item.standard_rate || 0,
       rate: item.rate || item.price || item.standard_rate || 0,
     }));
-    console.log("MultiCurrencyDialog: Formatted cart items", formattedItems);
+    // console.log("MultiCurrencyDialog: Formatted cart items", formattedItems);
     return formattedItems;
   }, [cartItems, cartStoreItems]);
 
@@ -88,9 +87,9 @@ export default function MultiCurrencyDialog({
       try {
         const shiftPayments = await fetchUserShiftPayments();
         setExpectedPayments(shiftPayments); // ✅ THIS WAS THE BUG
-        console.log("Fetched user shift payments:", shiftPayments);
+        // console.log("Fetched user shift payments:", shiftPayments);
       } catch (err) {
-        console.error("Error fetching user shift payments:", err);
+        // console.error("Error fetching user shift payments:", err);
         setExpectedPayments({});
       }
     };
@@ -195,7 +194,7 @@ export default function MultiCurrencyDialog({
           setActiveCurrency(firstMethod.key);
         }
       } catch (error) {
-        console.error("Error fetching payment method rates:", error);
+        // console.error("Error fetching payment method rates:", error);
         // Fall back to default exchange rates
         if (defaultExchangeRates && Object.keys(defaultExchangeRates).length > 0) {
           const fallbackMethods = Object.keys(defaultExchangeRates).map(currency => ({
@@ -387,15 +386,15 @@ const getVariance = (paid, key) => {
                             };
                           });
 
-                          console.log("=== Modal Payment Table Data ===");
-                          console.table(tableData);
+                          // console.log("=== Modal Payment Table Data ===");
+                          // console.table(tableData);
                           // Call the wrapper function
                           try {
                             await updateUserShiftPayments(tableData);
                             toast.success("Shift payments updated successfully!");
                             onOpenChange(false)
                           } catch (err) {
-                            console.error("Error updating shift payments:", err);
+                            // console.error("Error updating shift payments:", err);
                             toast.error("Failed to update shift payments!");
                           }
                          window.location.href = "/dashboard";

@@ -50,7 +50,7 @@ const MenuPage = () => {
   </div>
 
   {/* Middle content: buttons + menu */}
-  <div className="col-span-6">
+  <div className="col-span-6 min-w-0">
     <div className="flex items-center gap-4 justify-between">
       {/* Left: Dine In / Take Away */}
       <div className="flex items-center gap-2">

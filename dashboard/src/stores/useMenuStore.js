@@ -28,7 +28,7 @@ const data = await db.getDocList("Item", {
     });
     const pricedItems = (await res.json()).message;
 
-    console.log("Menu Items with User Prices:", pricedItems);
+    // console.log("Menu Items with User Prices:", pricedItems);
 
       set({ menuItems: pricedItems, loading: false });
     } catch (err) {

@@ -1,0 +1,132 @@
+{
+ "charts": [
+  {
+   "chart_name": "restaurant",
+   "label": "Chart Based on Order"
+  }
+ ],
+ "content": "[{\"id\":\"f_lNvo1oFs\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Restaurant</span>\",\"col\":12}},{\"id\":\"1ikTTSmQeO\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Dashboard\",\"col\":3}},{\"id\":\"TszUN-8Zfc\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Order\",\"col\":3}},{\"id\":\"tS0X_YNXjz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"p9uMqNPTj3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"wrUBv7H7SE\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ha Order\",\"col\":3}},{\"id\":\"1mv-ppXxuF\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Ha Table\",\"col\":3}},{\"id\":\"us40zjCT0j\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"ATYrnUqsgc\",\"type\":\"card\",\"data\":{\"card_name\":\"Master\",\"col\":4}},{\"id\":\"_gpDHkbluW\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"AWuxLWqj_i\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Chart Based on Order\",\"col\":12}}]",
+ "creation": "2025-12-31 08:19:12.642219",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "header",
+ "idx": 0,
+ "indicator_color": "",
+ "is_hidden": 0,
+ "label": "Restaurant",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Master",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "HA POS Settings",
+   "link_count": 0,
+   "link_to": "HA POS Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "HA Menu Category",
+   "link_count": 0,
+   "link_to": "HA Menu Category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "HA Waiter",
+   "link_count": 0,
+   "link_to": "HA Waiter",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "HA Shift POS",
+   "link_count": 0,
+   "link_to": "HA Shift POS",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-02-06 08:25:10.904041",
+ "modified_by": "Administrator",
+ "module": "Havano Restaurant Pos",
+ "name": "Restaurant",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 2.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Dashboard",
+   "type": "URL",
+   "url": "/dashboard"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Ha Table",
+   "link_to": "HA Table",
+   "stats_filter": "[[\"HA Table\",\"name\",\"is\",\"set\",false]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Sales Order",
+   "link_to": "Sales Order",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Payment Entry",
+   "link_to": "Payment Entry",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Sales Invoice",
+   "link_to": "Sales Invoice",
+   "stats_filter": "[[\"Sales Invoice\",\"name\",\"is\",\"set\",false]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Ha Order",
+   "link_to": "HA Order",
+   "stats_filter": "[]",
+   "type": "DocType"
+  }
+ ],
+ "title": "Restaurant"
+}

@@ -49,7 +49,7 @@ export default function MultiCurrencyDialog({
   const itemsToUse = useMemo(() => {
     const items = cartItems && cartItems.length > 0 ? cartItems : cartStoreItems;
     if (!items || items.length === 0) {
-      console.warn("MultiCurrencyDialog: No cart items found", { cartItems, cartStoreItems });
+      // console.warn("MultiCurrencyDialog: No cart items found", { cartItems, cartStoreItems });
       return [];
     }
     // Ensure items are in the correct format for the API
@@ -62,7 +62,7 @@ export default function MultiCurrencyDialog({
       price: item.price || item.rate || item.standard_rate || 0,
       rate: item.rate || item.price || item.standard_rate || 0,
     }));
-    console.log("MultiCurrencyDialog: Formatted cart items", formattedItems);
+    // console.log("MultiCurrencyDialog: Formatted cart items", formattedItems);
     return formattedItems;
   }, [cartItems, cartStoreItems]);
 
@@ -471,7 +471,7 @@ export default function MultiCurrencyDialog({
                                 cartItems: itemsToUse,
                                 orderPayload: orderPayload,
                               });
-                              console.log("still muilti",paymentData);
+                              // console.log("still muilti",paymentData);
                             } catch (err) {
                               // Log error but don't block user (payment already shown as successful)
                               console.error("Payment processing error (background):", err);

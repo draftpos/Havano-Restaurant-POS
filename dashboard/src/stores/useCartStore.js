@@ -16,6 +16,7 @@ export const useCartStore = create((set) => ({
   isUpdateDialogOpen: false,
 
   setCustomer: (customer) => set({ customer }),
+  setCustomerName: (customerName) => set({ customerName }),
   setTransactionType: (type) => set({ transactionType: type }),
   selectedReceipt: "default-receipt",
   setSelectedReceipt: (val) => set({ selectedReceipt: val }),

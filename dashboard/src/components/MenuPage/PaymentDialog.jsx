@@ -50,7 +50,7 @@ export default function PaymentDialog({
         // Get HA POS Settings document (Single doctype)
         const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
         const doc = settingsResponse?.message?.data;
-        console.log("HA POS Settings document:", doc);
+        // console.log("HA POS Settings document:", doc);
 
         let methods = [];
         
@@ -134,7 +134,7 @@ export default function PaymentDialog({
   const paymentStatus = useMemo(() => {
     const paid = sumPayments();
     const diff = paid - total;
-    console.log(diff);
+    // console.log(diff);
     return {
       paid,
       diff,
@@ -191,7 +191,7 @@ export default function PaymentDialog({
           // Only fetch invoice JSON if needed (optimized: conditional)
           try {
             // const invoiceJson = await get_invoice_json(transactionName);
-            console.log("Invoice JSON returned from backend MULTIPLE");
+            // console.log("Invoice JSON returned from backend MULTIPLE");
             window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${transactionName}`, "_blank");
 
             // Convert JSON to string
@@ -258,7 +258,7 @@ export default function PaymentDialog({
               );
               
               if (res && res.success) {
-                console.log("Table payment processed:", res.sales_invoice);
+                // console.log("Table payment processed:", res.sales_invoice);
                 // Print invoice if available
                 if (res.sales_invoice) {
                   window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
@@ -291,7 +291,7 @@ export default function PaymentDialog({
 
 
     
-          console.log("direct-----------------DD--------",cartItems)
+          // console.log("direct-----------------DD--------",cartItems)
 
           // For Dine In orders, no invoice is created, so skip invoice download
           if (res.dine_in_only) {
@@ -299,7 +299,7 @@ export default function PaymentDialog({
             // No invoice to download for Dine In orders
           } else if (res.sales_invoice) {
             try {
-              console.log("Payment successful bro:", res.sales_invoice);
+              // console.log("Payment successful bro:", res.sales_invoice);
                 window.open(
               `/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
               "_blank")

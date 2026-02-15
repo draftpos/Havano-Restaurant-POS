@@ -86,6 +86,8 @@ export default function useMenuNavigation({ NUMBER_OF_COLUMNS, items, target, se
 			}
 
 			case "Enter":
+				event.preventDefault();
+				event.stopPropagation();
 				handleSelectItem(currentIndex);
 				break;
 

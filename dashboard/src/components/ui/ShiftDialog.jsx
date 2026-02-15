@@ -45,7 +45,7 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction, cartItems }) => 
         open={openPayment}
         onOpenChange={setOpenPayment}
         onPaid={(data) => {
-          console.log("Payment done:", data);
+          // console.log("Payment done:", data);
           setOpenPayment(false);
           onOpenChange(false); // close shift dialog too
         }}
@@ -66,8 +66,8 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction, cartItems }) => 
                   } else if (btn.action === "open") {
                     try {
                       const data = await openShift();
-                      console.log("Shift opened:", data);
-                      onShiftAction("open", data.message);
+                      // console.log("Shift opened:", data);
+                      typeof onShiftAction === "function" && onShiftAction("open", data.message);
                       onOpenChange(false);
                       window.location.href = "/dashboard";
                     } catch (err) {
@@ -78,7 +78,7 @@ const ShiftDialog = ({ open, type, onOpenChange, onShiftAction, cartItems }) => 
                     setOpenPayment(true);
                   } else {
                     onOpenChange(false);
-                    onShiftAction(btn.action, `${btn.label} clicked`);
+                    typeof onShiftAction === "function" && onShiftAction(btn.action, `${btn.label} clicked`);
                   }
                 }}
                 className={`px-4 py-2 rounded font-bold ${

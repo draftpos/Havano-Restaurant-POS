@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { checkStock, negativeStock, getItemUoms } from "@/lib/utils";
+import { checkStock, getItemUoms, negativeStock } from "@/lib/utils";
 import { toast } from "sonner";
 
 import { useMenuContext } from "@/contexts/MenuContext";
@@ -12,8 +12,9 @@ const MenuItemCard = ({ item, index }) => {
   const [showUomModal, setShowUomModal] = useState(false);
   const [pendingItem, setPendingItem] = useState(null);
   const [dynamicUoms, setDynamicUoms] = useState([]);
+  const [addingItemName, setAddingItemName] = useState(null);
 
-  const { currentIndex, setCurrentIndex, target, setTarget } = useMenuContext();
+  const { currentIndex, setCurrentIndex, target, setTarget, allowNegativeStock } = useMenuContext();
   const addToCart = useCartStore((state) => state.addToCart);
   const cartItems = useCartStore((state) => state.cart || []);
 
@@ -34,53 +35,83 @@ const MenuItemCard = ({ item, index }) => {
   const isActive = currentIndex === index && target === "menu";
 
 const handleAddToCart = async () => {
-  const stockData = await checkStock(item.name);
-  const allowNegative = await negativeStock();
+  // Prevent double-add: only one add-in-progress per item at a time
+  if (addingItemName === item.name) return;
+  setAddingItemName(item.name);
 
-  if (!allowNegative && stockData?.stock <= 0) {
-    toast.error("Error", { description: `No stock available for ${item.item_name}` });
-    return;
-  }
+  try {
+    // can_use_negative_stock is loaded once on menu open (MenuContext). Only check stock when negative not allowed.
+    if (allowNegativeStock === false) {
+      const stockData = await checkStock(item.name);
+      if (stockData?.stock <= 0) {
+        toast.error("Error", { description: `No stock available for ${item.item_name}` });
+        return;
+      }
+    } else if (allowNegativeStock === null) {
+      // Not yet loaded: one-time fallback so we don't add when stock is 0
+      const [stockData, allowNegative] = await Promise.all([
+        checkStock(item.name),
+        negativeStock(),
+      ]);
+      if (!allowNegative && stockData?.stock <= 0) {
+        toast.error("Error", { description: `No stock available for ${item.item_name}` });
+        return;
+      }
+    }
+    // allowNegativeStock === true: skip stock check entirely
 
-  const existingCartItem = cartItems.find((ci) => ci.name === item.name);
+    // Use fresh cart from store in case another add completed while we awaited
+    const currentCart = useCartStore.getState().cart || [];
+    const existingCartItem = currentCart.find((ci) => ci.name === item.name);
 
-  if (existingCartItem) {
-    // Already in cart → increment quantity
-    addToCart({
-      ...existingCartItem,
-      quantity: existingCartItem.quantity + 1,
+    if (existingCartItem) {
+      addToCart({
+        ...existingCartItem,
+        quantity: existingCartItem.quantity + 1,
+      });
+      return;
+    }
+
+    // Not in cart → fetch UOMs (single call)
+    const fetchedUoms = await getItemUoms(item.name);
+
+    if (!fetchedUoms || fetchedUoms.length === 0) {
+      toast.error(`No UOMs found for ${item.item_name}`);
+      return;
+    }
+
+    // Re-check cart after fetch; user might have added same item via another click
+    const cartAfterFetch = useCartStore.getState().cart || [];
+    const existingNow = cartAfterFetch.find((ci) => ci.name === item.name);
+    if (existingNow) {
+      addToCart({ ...existingNow, quantity: existingNow.quantity + 1 });
+      return;
+    }
+
+    if (fetchedUoms.length === 1) {
+      addToCart({
+        name: item.name,
+        item_name: item.item_name,
+        custom_menu_category: item.custom_menu_category,
+        quantity: 1,
+        uom: fetchedUoms[0],
+        price: item.standard_rate ?? item.price ?? 0,
+        standard_rate: item.standard_rate ?? item.price ?? 0,
+        remark: "No stock override",
+      });
+      return;
+    }
+
+    setPendingItem(item);
+    setDynamicUoms(fetchedUoms);
+    setShowUomModal(true);
+  } catch (err) {
+    toast.error("Could not add item", {
+      description: err?.message || "Please try again.",
     });
-    return;
+  } finally {
+    setAddingItemName(null);
   }
-
-  // Not in cart → fetch UOMs dynamically
-  const fetchedUoms = await getItemUoms(item.name);
-  console.log("fetched uoms", fetchedUoms);
-
-  if (!fetchedUoms || fetchedUoms.length === 0) {
-    toast.error(`No UOMs found for ${item.item_name}`);
-    return;
-  }
-
-  if (fetchedUoms.length === 1) {
-    // Only one UOM → add directly
-    addToCart({
-      name: item.name,
-      item_name: item.item_name,
-      custom_menu_category: item.custom_menu_category,
-      quantity: 1,
-      uom: fetchedUoms[0],
-      price: item.standard_rate ?? item.price ?? 0,
-      standard_rate: item.standard_rate ?? item.price ?? 0,
-      remark: "No stock override",
-    });
-    return;
-  }
-
-  // Multiple UOMs → show modal
-  setPendingItem(item);
-  setDynamicUoms(fetchedUoms);
-  setShowUomModal(true);
 };
 
 
@@ -118,7 +149,8 @@ const handleAddToCart = async () => {
         }}
         className={cn(
           "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50 py-2 gap-2",
-          isActive && "border-primary bg-primary/10"
+          isActive && "border-primary bg-primary/10",
+          addingItemName === item.name && "pointer-events-none opacity-70"
         )}
       >
         <CardHeader className="flex items-start justify-between px-3 py-1">
