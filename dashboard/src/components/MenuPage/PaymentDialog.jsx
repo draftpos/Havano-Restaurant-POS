@@ -10,7 +10,7 @@ import {
 import MultiCurrencyDialog from "./MultiCurrencyDialog";
 import Keyboard from "@/components/ui/Keyboard";
 import { Textarea } from "@/components/ui/textarea";
-import { createInvoiceAndPaymentQueue, makePaymentForTransaction, get_invoice_json, processTablePayment } from "@/lib/utils";
+import { createInvoiceAndPaymentQueue, makePaymentForTransaction, processTablePayment, get_invoice_json } from "@/lib/utils";
 import { db, call } from "@/lib/frappeClient";
 import { useCartStore } from "@/stores/useCartStore";
 
@@ -33,10 +33,8 @@ export default function PaymentDialog({
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(true);
   const [total, setTotal] = useState(0);
   const [openMultiCurrencyDialog, setOpenMultiCurrencyDialog] = useState(false);
-
+  const [canPrintInvoice, setCanPrintInvoice] = useState(false);
   const { selectedReceipt } = useCartStore();
-
-  
 
   // Fetch payment methods from HA POS Setting
   useEffect(() => {
@@ -81,7 +79,9 @@ export default function PaymentDialog({
           setPaymentMethods(methods);
           setActiveMethod("Cash"); // Always set Cash as default active method
           setPaymentAmounts(methods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
-        } else {
+        }
+        setCanPrintInvoice(Boolean(doc?.can_print_invoice));
+        if (methods.length === 0) {
           // Fallback to Cash only if no methods found
           const defaultMethods = ["Cash"];
           setPaymentMethods(defaultMethods);
@@ -95,6 +95,7 @@ export default function PaymentDialog({
         setPaymentMethods(defaultMethods);
         setActiveMethod("Cash");
         setPaymentAmounts(defaultMethods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
+        setCanPrintInvoice(false);
       } finally {
         setLoadingPaymentMethods(false);
       }
@@ -128,6 +129,25 @@ export default function PaymentDialog({
       const n = parseFloat(v) || 0;
       return acc + n;
     }, 0);
+  };
+
+  const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
+    if (!canPrintInvoice || !invoiceName) return;
+    try {
+      const json = await get_invoice_json(invoiceName);
+      const data = { ...(json || {}), ReceiptType: receiptType || "" };
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${invoiceName}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+    } catch (e) {
+      console.error("Invoice download failed:", e);
+    }
   };
 
   // Calculate payment status
@@ -176,45 +196,16 @@ export default function PaymentDialog({
 
     const fullNote = note ? `${note} | ${breakdown}` : breakdown;
 
-    // Immediately show success and close dialog (optimistic UI)
-    if (typeof onPaid === "function") {
-      onPaid({ success: true, message: "Payment processing..." });
-    }
-    if (typeof onOpenChange === "function") {
-      onOpenChange(false);
-    }
+    if (typeof onPaid === "function") onPaid({ success: true, message: "Payment processing..." });
+    if (typeof onOpenChange === "function") onOpenChange(false);
 
-    // Process payment in background (fire and forget)
     (async () => {
       try {
         if (isExistingTransaction && transactionDoctype && transactionName) {
-          // Only fetch invoice JSON if needed (optimized: conditional)
-          try {
-            // const invoiceJson = await get_invoice_json(transactionName);
-            // console.log("Invoice JSON returned from backend MULTIPLE");
-            window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${transactionName}`, "_blank");
-
-            // Convert JSON to string
-            const jsonStr = JSON.stringify(invoiceJson, null, 2);
-
-            // Create a blob and download (optimized: async download)
-            // const blob = new Blob([jsonStr], { type: "text/plain" });
-            // const link = document.createElement("a");
-            // link.href = URL.createObjectURL(blob);
-            // link.download = `${transactionName}.txt`;
-            // document.body.appendChild(link);
-            // link.click();
-            // Cleanup asynchronously (non-blocking)
-            setTimeout(() => {
-              document.body.removeChild(link);
-              URL.revokeObjectURL(link.href);
-            }, 0);
-          } catch (error) {
-            console.error("Error fetching invoice JSON:", error);
-            // Continue with payment even if JSON fetch fails
+          
+          if (transactionDoctype === "Sales Invoice") {
+            await triggerInvoiceDownload(transactionName, selectedReceipt);
           }
-
-          // Make payment for existing Sales Invoice or Quotation (background)
           await makePaymentForTransaction(
             transactionDoctype,
             transactionName,
@@ -223,7 +214,6 @@ export default function PaymentDialog({
             fullNote,
             paymentBreakdown.length > 0 ? paymentBreakdown : null,
             change
-
           );
         } else {
           // Check if this is a table payment (has table_orders in payload)
@@ -256,18 +246,8 @@ export default function PaymentDialog({
                 paymentBreakdown.length > 0 ? paymentBreakdown : null,
                 change
               );
-              
-              if (res && res.success) {
-                // console.log("Table payment processed:", res.sales_invoice);
-                // Print invoice if available
-                if (res.sales_invoice) {
-                  window.open(`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}`, "_blank");
-                }
-                
-                // Notify payment success callback AFTER payment is fully complete
-                if (typeof onPaid === "function") {
-                  onPaid({ success: true, message: "Payment successful" });
-                }
+              if (res?.success && res.sales_invoice) {
+                await triggerInvoiceDownload(res.sales_invoice, selectedReceipt);
               }
             } catch (error) {
               console.error("Error processing table payment:", error);
@@ -275,7 +255,7 @@ export default function PaymentDialog({
             return;
           }
 
-          // Use queue system for async processing (background) for regular orders
+          // Use queue system - returns immediately after invoice creation (payments in background)
           const res = await createInvoiceAndPaymentQueue(
             cartItems,
             finalCustomer,
@@ -284,36 +264,16 @@ export default function PaymentDialog({
             paidTotal > 0 ? paidTotal : null,
             fullNote,
             payload,
-            null,  // <--- multiCurrencyPayments placeholder
+            null,
             change
           );
-
-
-
-    
-          // console.log("direct-----------------DD--------",cartItems)
-
-          // For Dine In orders, no invoice is created, so skip invoice download
-          if (res.dine_in_only) {
-            console.log("Dine In order created successfully:", res.order_id);
-            // No invoice to download for Dine In orders
-          } else if (res.sales_invoice) {
-            try {
-              // console.log("Payment successful bro:", res.sales_invoice);
-                window.open(
-              `/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
-              "_blank")
-              
-            } catch (error) {
-              console.error("Error fetching invoice JSON:", error);
-              // Continue with payment even if JSON fetch fails
-            }
+          if (res?.sales_invoice) {
+            await triggerInvoiceDownload(res.sales_invoice, selectedReceipt);
           }
-
         }
       } catch (err) {
-        // Log error but don't block user (payment already shown as successful)
-        console.error("Payment processing error (background):", err);
+        console.error("Payment processing error:", err);
+        if (typeof onPaid === "function") onPaid({ success: false, message: err?.message || "Payment failed" });
       }
     })();
   };
@@ -400,8 +360,13 @@ export default function PaymentDialog({
         cartItems={cartItems}
         orderPayload={orderPayload}
       />
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="p-4 rounded-xl bg-white shadow-lg w-full max-w-7xl payment-dialog-content">
+      <Dialog
+        open={open}
+        onOpenChange={onOpenChange}
+      >
+        <DialogContent
+          className="p-4 rounded-xl bg-white shadow-lg w-full max-w-7xl payment-dialog-content"
+        >
           <div className="flex flex-col h-full">
             <DialogHeader className="mb-3 flex-shrink-0">
               <DialogTitle className="text-lg font-semibold">

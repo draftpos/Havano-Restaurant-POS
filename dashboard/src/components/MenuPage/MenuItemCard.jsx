@@ -138,6 +138,10 @@ const handleAddToCart = async () => {
     setTarget("menu");
   };
 
+  const imageUrl = item.image
+    ? (item.image.startsWith("/") ? item.image : `/${item.image}`)
+    : null;
+
   return (
     <>
       <Card
@@ -153,8 +157,15 @@ const handleAddToCart = async () => {
           addingItemName === item.name && "pointer-events-none opacity-70"
         )}
       >
-        <CardHeader className="flex items-start justify-between px-3 py-1">
-          <CardTitle className="break-words whitespace-normal text-sm leading-tight">
+        <CardHeader className="flex flex-col items-center gap-2 px-3 py-1">
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt={item.item_name}
+              className="w-10 h-10 object-cover rounded-md flex-shrink-0"
+            />
+          )}
+          <CardTitle className="break-words text-center whitespace-normal text-sm leading-tight w-full">
             {item.item_name}
           </CardTitle>
         </CardHeader>

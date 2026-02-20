@@ -145,15 +145,14 @@ after_migrate = ["havano_restaurant_pos.overrides.apply_trial_balance_fix"]
 # Hook on document methods and events
 
 doc_events = {
-    # "*": {
-    # 	"on_update": "method",
-    # 	"on_cancel": "method",
-    # 	"on_trash": "method"
-    # }
     "Item Price": {
         "after_insert": "havano_restaurant_pos.doc_events.update_standard_rate",
         "on_update": "havano_restaurant_pos.doc_events.update_standard_rate",
-    }
+    },
+    "Sales Invoice": {
+        "before_submit": "havano_restaurant_pos.doc_events.sales_invoice_before_submit",
+        "on_submit": "havano_restaurant_pos.doc_events.sales_invoice_on_submit",
+    },
 }
 
 # Scheduled Tasks

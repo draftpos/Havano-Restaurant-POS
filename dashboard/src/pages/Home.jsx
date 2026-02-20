@@ -207,31 +207,42 @@ const Home = () => {
                           to start an order with it pre-filled in your cart.
                         </div>
                       )}
-                      {popularItems.map((item, index) => (
-                        <button
-                          key={item.name}
-                          type="button"
-                          onClick={() => handlePopularItemClick(item)}
-                          className="w-full flex items-center justify-between bg-secondary-background rounded-md py-2 px-4 transition hover:bg-secondary-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:cursor-pointer"
-                        >
-                          <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className="p-2 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
-                              <p className="text-lg font-bold text-white">
-                                {index + 1}
-                              </p>
+                      {popularItems.map((item, index) => {
+                        const imageUrl = item.image
+                          ? (item.image.startsWith("/") ? item.image : `/${item.image}`)
+                          : null;
+                        return (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => handlePopularItemClick(item)}
+                            className="w-full flex items-center justify-between bg-secondary-background rounded-md py-2 px-4 transition hover:bg-secondary-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:cursor-pointer"
+                          >
+                            <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                              {imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt={item.item_name}
+                                  className="w-10 h-10 object-cover rounded-md flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="p-2 h-8 w-8 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <p className="text-lg font-bold text-white">{index + 1}</p>
+                                </div>
+                              )}
+                              <div className="text-center w-full">
+                                <p className="font-medium text-center break-words whitespace-normal">{item.item_name}</p>
+                                <p className="text-xs text-gray-500">
+                                  Orders: {item.orderCount ?? 0}
+                                </p>
+                              </div>
                             </div>
-                            <div className="text-left flex-1 min-w-0">
-                              <p className="font-medium break-words whitespace-normal">{item.item_name}</p>
-                              <p className="text-xs text-gray-500">
-                                Orders: {item.orderCount ?? 0}
-                              </p>
-                            </div>
-                          </div>
-                          <p className="font-semibold">
-                            {formatCurrency(item.standard_rate)}
-                          </p>
-                        </button>
-                      ))}
+                            <p className="font-semibold">
+                              {formatCurrency(item.standard_rate)}
+                            </p>
+                          </button>
+                        );
+                      })}
                     </>
                   )}
                 </div>

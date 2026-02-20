@@ -67,16 +67,12 @@ function useMultiCurrencyPayment() {
 				orderPayload,
 				cleanedPayments // multi_currency_payments
 			);
-			console.log("clean payments", cleanedPayments);
-
 			try {
-				const result = await savePaymentsToShift(cleanedPayments);
-				console.log("Payments saved to shift:", result);
+				await savePaymentsToShift(cleanedPayments);
 			} catch (err) {
 				console.error("Failed to save payments to shift:", err);
 			}
 
-			console.log("multipayment", cartItems);
 			if (!res?.success) {
 				// Include details in the error message for better debugging
 				const errorMsg = res?.details 
@@ -89,16 +85,26 @@ function useMultiCurrencyPayment() {
 			}
 
 			setSuccess(true);
-			try {
-				console.log("Fetching invoice JSON for multiple:", res.sales_invoice);
-
-				window.open(
-				`/api/method/havano_restaurant_pos.api.download_invoice_json?name=${res.sales_invoice}&receipt_type=${selectedReceipt}`,
-				"_blank"
-				)
-			} catch (error) {
-			console.error("Error fetching invoice JSON:", error);
-			// Continue with payment even if JSON fetch fails
+			if (res.sales_invoice) {
+				try {
+					const settingsRes = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+					const canPrint = Boolean(settingsRes?.message?.data?.can_print_invoice);
+					if (canPrint) {
+						const json = await get_invoice_json(res.sales_invoice);
+						const data = { ...(json || {}), ReceiptType: selectedReceipt || "" };
+						const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+						const blobUrl = URL.createObjectURL(blob);
+						const a = document.createElement("a");
+						a.href = blobUrl;
+						a.download = `${res.sales_invoice}.txt`;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+					}
+				} catch (err) {
+					console.error("Error triggering invoice download:", err);
+				}
 			}
 			return res;
 

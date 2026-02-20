@@ -2690,12 +2690,10 @@ def make_payment_for_transaction(
         }
 
 
-@frappe.whitelist()
-def item_is_orders(item_name):
-    # Get the item document
-    item = frappe.get_doc("Item", item_name)
-    
-    # List of custom fields to check
+def _get_item_order_flags_batch(item_codes):
+    """Batch fetch item custom order flags for many items (single query)."""
+    if not item_codes:
+        return {}
     custom_fields = [
         "custom_is_order_item_1",
         "custom_is_order_item_2",
@@ -2704,14 +2702,34 @@ def item_is_orders(item_name):
         "custom_is_order_item_5",
         "custom_is_order_item_6",
     ]
-    
-    # Build a dictionary with field names as keys and their boolean values
-    custom_flags = {
-        f"Item-{field}": bool(getattr(item, field, 0))
-        for field in custom_fields
-    }
-    
-    return custom_flags
+    meta = frappe.get_meta("Item")
+    fields = ["name"] + [f for f in custom_fields if meta.has_field(f)]
+    rows = frappe.get_all(
+        "Item",
+        filters={"name": ["in", list(item_codes)]},
+        fields=fields,
+    )
+    result = {}
+    for row in rows:
+        flags = {
+            f"Item-{f}": bool(row.get(f, 0))
+            for f in custom_fields
+            if f in row or meta.has_field(f)
+        }
+        result[row["name"]] = flags
+    return result
+
+
+@frappe.whitelist()
+def item_is_orders(item_name):
+    """Single-item wrapper for backward compatibility."""
+    custom_fields = [
+        "custom_is_order_item_1", "custom_is_order_item_2", "custom_is_order_item_3",
+        "custom_is_order_item_4", "custom_is_order_item_5", "custom_is_order_item_6",
+    ]
+    default = {f"Item-{f}": False for f in custom_fields}
+    flags = _get_item_order_flags_batch([item_name])
+    return flags.get(item_name, default)
 
 @frappe.whitelist()
 def get_stock(item_code):
@@ -2802,167 +2820,134 @@ def add_remark(remark_text: str = None):
 
     return {"status": "success", "remark": doc.remark}
 
-@frappe.whitelist()
-def get_invoice_json(invoice_name):
-    try:
+def _build_invoice_json(invoice_doc, cost_center_doc=None):
+    """
+    Build invoice JSON from Sales Invoice doc. Optimized: batch item flags, minimal queries.
+    cost_center_doc: optional dict from Cost Center Details (avoids lookup when provided).
+    """
+    company_name = invoice_doc.company
+    if not cost_center_doc:
         user = frappe.session.user
-        settings = frappe.get_single("HA POS Settings")
-        cost_center_name = None
-        for row in settings.user_mapping:
-            if row.user == user:
-                cost_center_name = row.cost_center
-                break
-        cost_center_doc = frappe.get_value(
-        "Cost Center Details",
-        {"cost_center": cost_center_name},
-        [
+        cost_center_name = frappe.db.get_value(
+            "Ha User Mapping",
+            {"parent": "HA POS Settings", "parenttype": "HA POS Settings", "user": user},
             "cost_center",
-            "email",
-            "address_line_1",
-            "address_line_2",
-            "phone",
-            "company_name",
-        ],
-        as_dict=True
         )
-
+        if not cost_center_name:
+            frappe.throw("No cost center mapped for current user in HA POS Settings")
+        cost_center_doc = frappe.db.get_value(
+            "Cost Center Details",
+            {"cost_center": cost_center_name},
+            ["email", "address_line_1", "address_line_2", "phone", "company_name"],
+            as_dict=True,
+        )
         if not cost_center_doc:
             frappe.throw(f"No Cost Center Details found for {cost_center_name}")
 
-        email = cost_center_doc.email
-        address_line_1 = cost_center_doc.address_line_1
-        address_line_2 = cost_center_doc.address_line_2
-        phone = cost_center_doc.phone
-        company_name = cost_center_doc.company_name
-
-
-        print(f"email: {email}, address_line_1: {address_line_1}, address_line_2: {address_line_2}, phone: {phone}, company_name: {company_name}")
-
-                
-        invoice = frappe.get_doc("Sales Invoice", invoice_name)
-        company = frappe.get_doc("Company", invoice.company)
-
-        # Get company address from Address doctype (optimized: single query)
-        company_address = ""
-        address_data = frappe.get_all(
+    company_city = company_state = company_pincode = ""
+    company_fields = frappe.db.get_value(
+        "Company",
+        company_name,
+        ["company_name", "phone_no", "tax_id"],
+        as_dict=True,
+    ) or {}
+    addr_list = frappe.get_all(
+        "Address",
+        filters=[
+            ["Dynamic Link", "link_doctype", "=", "Company"],
+            ["Dynamic Link", "link_name", "=", company_name],
+            ["Address", "is_primary_address", "=", 1],
+        ],
+        fields=["address_line1", "address_line2", "city", "state", "pincode"],
+        limit=1,
+    )
+    if not addr_list:
+        addr_list = frappe.get_all(
             "Address",
-            filters={
-                "link_doctype": "Company",
-                "link_name": company.name,
-                "is_primary_address": 1
-            },
-            fields=["address_line1", "address_line2", "city", "state", "pincode"],
-            limit=1
-        )
-        
-        if address_data:
-            addr = address_data[0]
-            address_parts = []
-            if addr.get("address_line1"):
-                address_parts.append(addr.get("address_line1"))
-            if addr.get("address_line2"):
-                address_parts.append(addr.get("address_line2"))
-            company_address = ", ".join(address_parts) if address_parts else ""
-            # Use address city/state/pincode if available, otherwise fall back to company
-            company_city = addr.get("city") or getattr(company, "city", "") or ""
-            company_state = addr.get("state") or getattr(company, "state", "") or ""
-            company_pincode = addr.get("pincode") or getattr(company, "pincode", "") or ""
-        else:
-            # Fallback: try to get any address for the company
-            fallback_address = frappe.get_all(
-                "Address",
-                filters={
-                    "link_doctype": "Company",
-                    "link_name": company.name
-                },
-                fields=["address_line1", "address_line2", "city", "state", "pincode"],
-                limit=1
-            )
-            if fallback_address:
-                addr = fallback_address[0]
-                address_parts = []
-                if addr.get("address_line1"):
-                    address_parts.append(addr.get("address_line1"))
-                if addr.get("address_line2"):
-                    address_parts.append(addr.get("address_line2"))
-                company_address = ", ".join(address_parts) if address_parts else ""
-                company_city = addr.get("city") or getattr(company, "city", "") or ""
-                company_state = addr.get("state") or getattr(company, "state", "") or ""
-                company_pincode = addr.get("pincode") or getattr(company, "pincode", "") or ""
-            else:
-                # No address found, use company fields or empty
-                company_address = ""
-                company_city = getattr(company, "city", "") or ""
-                company_state = getattr(company, "state", "") or ""
-                company_pincode = getattr(company, "pincode", "") or ""
-
-        # Build item list
-        items = []
-        for item in invoice.items:
-            # Call your function to get the custom flags
-            custom_flags = item_is_orders(item.item_code)  # returns the dict we made earlier
-            
-            # Append the item with all fields
-            items.append({
-                "ProductName": item.item_name,
-                "productid": item.item_code,
-                "Qty": flt(item.qty),
-                "Price": flt(item.rate),
-                "Amount": flt(item.amount),
-                "tax_type": getattr(item, "tax_type", "VAT"),
-                "tax_rate": str(getattr(item, "tax_rate", 15.0)),
-                "tax_amount": str(getattr(item, "tax_amount", 0.0)),
-                "remarks": item.get("custom_remarks", ""),
-                **custom_flags  # merge the flags from your function
-            })
-
-        data = {
-            "CompanyName": company_name or company.company_name,
-            "CompanyEmail": cost_center_doc.email or "",
-            "CompanyAddressLine1": cost_center_doc.address_line_1 or "",
-            "CompanyAddressLine2": cost_center_doc.address_line_2 or "",
-            "Tel": cost_center_doc.phone or "",
-            "City": company_city,
-            "State": company_state,
-            "postcode": company_pincode,
-            "contact": getattr(company, "phone_no", None) or getattr(company, "phone", None) or "",
-            "TIN": getattr(company, "tax_id", None) or "",
-            "VATNo": getattr(company, "vat", None) or "",
-            "InvoiceNo": invoice.name,
-            "InvoiceDate": invoice.creation.strftime("%Y-%m-%d"),
-            "CashierName": invoice.owner,
-            "CustomerName": invoice.customer_name,
-            "CustomerContact": invoice.contact_display or invoice.customer_name,
-            "CustomerTradeName": getattr(invoice, "customer_trade_name", None),
-            "CustomerEmail": invoice.contact_email or None,
-            "CustomerTIN": getattr(invoice, "tax_id", None),
-            "CustomerVAT": getattr(invoice, "vat_number", None),
-            "Customeraddress": invoice.customer_address or None,
-            "itemlist": items,
-            "AmountTendered": str(  flt(invoice.grand_total) + invoice.custom_change ),
-            "Change": invoice.custom_change,
-            "Currency": invoice.currency,
-            "Footer": "Thank you for your purchase!",
-            "MultiCurrencyDetails": [
-                {"Key": invoice.currency, "Value": flt(invoice.grand_total)}
+            filters=[
+                ["Dynamic Link", "link_doctype", "=", "Company"],
+                ["Dynamic Link", "link_name", "=", company_name],
             ],
-            "DeviceID": getattr(invoice, "custom_device_id", ""),
-            "DeviceSerial": getattr(invoice, "custom_device_serial_no", ""),
-            "FiscalDay":  getattr(invoice, "custom_fiscal_day", ""),
-            "ReceiptNo": getattr(invoice, "custom_receiptno", ""),
-            "CustomerRef": getattr(invoice, "customer_ref", "None"),
-            "VCode":  getattr(invoice, "custom_verification_code", ""),
-            "QRCode":  getattr(invoice, "custom_invoice_qr_code", ""),
-            "DiscAmt": str(flt(invoice.discount_amount)),
-            "Subtotal": flt(invoice.base_net_total),
-            "TotalVat": str(flt(invoice.total_taxes_and_charges)),
-            "GrandTotal": flt(invoice.grand_total),
-            "TaxType": "Standard VAT",
-            "PaymentMode": invoice.payment_terms_template or "Cash",
-        }
-        print(data)
-        return data
+            fields=["address_line1", "address_line2", "city", "state", "pincode"],
+            limit=1,
+        )
+    addr = addr_list[0] if addr_list else None
+    if addr:
+        company_city = addr.get("city") or ""
+        company_state = addr.get("state") or ""
+        company_pincode = addr.get("pincode") or ""
+    else:
+        company_city = company_state = company_pincode = ""
 
+    item_codes = [r.item_code for r in invoice_doc.items if r.item_code]
+    item_flags = _get_item_order_flags_batch(item_codes) if item_codes else {}
+
+    items = []
+    for item in invoice_doc.items:
+        custom_flags = item_flags.get(item.item_code, {})
+        items.append({
+            "ProductName": item.item_name,
+            "productid": item.item_code,
+            "Qty": flt(item.qty),
+            "Price": flt(item.rate),
+            "Amount": flt(item.amount),
+            "tax_type": getattr(item, "tax_type", "VAT"),
+            "tax_rate": str(getattr(item, "tax_rate", 15.0)),
+            "tax_amount": str(getattr(item, "tax_amount", 0.0)),
+            "remarks": item.get("custom_remarks", ""),
+            **custom_flags,
+        })
+
+    custom_change = getattr(invoice_doc, "custom_change", 0) or 0
+    return {
+        "CompanyName": cost_center_doc.get("company_name") or company_fields.get("company_name", ""),
+        "CompanyEmail": cost_center_doc.get("email") or "",
+        "CompanyAddressLine1": cost_center_doc.get("address_line_1") or "",
+        "CompanyAddressLine2": cost_center_doc.get("address_line_2") or "",
+        "Tel": cost_center_doc.get("phone") or "",
+        "City": company_city,
+        "State": company_state,
+        "postcode": company_pincode,
+        "contact": company_fields.get("phone_no") or "",
+        "TIN": company_fields.get("tax_id") or "",
+        "VATNo": "",
+        "InvoiceNo": invoice_doc.name,
+        "InvoiceDate": invoice_doc.creation.strftime("%Y-%m-%d"),
+        "CashierName": invoice_doc.owner,
+        "CustomerName": invoice_doc.customer_name,
+        "CustomerContact": invoice_doc.contact_display or invoice_doc.customer_name,
+        "CustomerTradeName": getattr(invoice_doc, "customer_trade_name", None),
+        "CustomerEmail": invoice_doc.contact_email or None,
+        "CustomerTIN": getattr(invoice_doc, "tax_id", None),
+        "CustomerVAT": getattr(invoice_doc, "vat_number", None),
+        "Customeraddress": invoice_doc.customer_address or None,
+        "itemlist": items,
+        "AmountTendered": str(flt(invoice_doc.grand_total) + custom_change),
+        "Change": custom_change,
+        "Currency": invoice_doc.currency,
+        "Footer": "Thank you for your purchase!",
+        "MultiCurrencyDetails": [{"Key": invoice_doc.currency, "Value": flt(invoice_doc.grand_total)}],
+        "DeviceID": getattr(invoice_doc, "custom_device_id", ""),
+        "DeviceSerial": getattr(invoice_doc, "custom_device_serial_no", ""),
+        "FiscalDay": getattr(invoice_doc, "custom_fiscal_day", ""),
+        "ReceiptNo": getattr(invoice_doc, "custom_receiptno", ""),
+        "CustomerRef": getattr(invoice_doc, "customer_ref", "None"),
+        "VCode": getattr(invoice_doc, "custom_verification_code", ""),
+        "QRCode": getattr(invoice_doc, "custom_invoice_qr_code", ""),
+        "DiscAmt": str(flt(invoice_doc.discount_amount)),
+        "Subtotal": flt(invoice_doc.base_net_total),
+        "TotalVat": str(flt(invoice_doc.total_taxes_and_charges)),
+        "GrandTotal": flt(invoice_doc.grand_total),
+        "TaxType": "Standard VAT",
+        "PaymentMode": invoice_doc.payment_terms_template or "Cash",
+    }
+
+
+@frappe.whitelist()
+def get_invoice_json(invoice_name):
+    try:
+        invoice = frappe.get_doc("Sales Invoice", invoice_name)
+        return _build_invoice_json(invoice)
     except frappe.DoesNotExistError:
         frappe.throw("Sales Invoice {0} does not exist".format(invoice_name))
     except Exception as e:
@@ -4352,7 +4337,7 @@ def get_menu_items_with_user_prices():
             "custom_do_not_show_in_pos": 0,
             "disabled": 0
         },
-        fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate"]
+        fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
     )
 
     # fetch item prices in one go
@@ -4375,7 +4360,6 @@ def get_menu_items_with_user_prices():
 @frappe.whitelist()
 def create_invoice_and_payment_queue(payload=None, **kwargs):
 
-    print(" this is the sales invoice we are creating-=---------------1111-------------------------")
     """Create sales invoice and payment entries in background queue.
     Returns immediately with job ID for async processing.
     
@@ -4405,19 +4389,28 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
             note = kwargs.get("note")
             order_payload = kwargs.get("order_payload")
             multi_currency_payments = kwargs.get("multi_currency_payments")
-        # Prepare items for sales invoice
+        # Prepare items for sales invoice - merge duplicates to reduce processing time
         change = (payload.get("change") if payload else None) or frappe.form_dict.get("change")
 
-       
-        items = []
+        # Merge duplicate items (same item_code, rate, uom) to reduce get_item_details calls
+        merged = {}
         for item in cart_items or []:
             item_code = item.get("name") or item.get("item_code") or item.get("item_name")
-            qty = item.get("quantity") or item.get("qty") or 1
-            rate = item.get("price") or item.get("rate") or 0
-            remarks = item.get("remark")
-            uom={item.get("uom")}
-            items.append({"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks, "uom": uom})          
-        
+            if not item_code:
+                continue
+            qty = float(item.get("quantity") or item.get("qty") or 1)
+            rate = float(item.get("price") or item.get("rate") or 0)
+            remarks = item.get("remark") or ""
+            uom = item.get("uom")
+            if isinstance(uom, set):
+                uom = next(iter(uom)) if uom else None
+            key = (str(item_code), rate, uom or "")
+            if key not in merged:
+                merged[key] = {"item_code": item_code, "qty": qty, "rate": rate, "remarks": remarks, "uom": uom}
+            else:
+                merged[key]["qty"] += qty
+
+        items = list(merged.values())
         if not items:
             return {
                 "success": False,
@@ -4513,15 +4506,21 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
                 }
         
         # For non-Dine In orders, proceed with normal flow (create invoice and payment)
-        # 1. Create Sales Invoice synchronously (immediate)
+        # 1. Create Sales Invoice (insert only - no submit) for fast response
         from havano_restaurant_pos.havano_restaurant_pos.doctype.ha_pos_invoice.ha_pos_invoice import (
             create_sales_invoice,
         )
-        
+
         try:
-            inv = create_sales_invoice(customer, items, change=change,multi_currency_payments=multi_currency_payments,)
+            inv = create_sales_invoice(
+                customer,
+                items,
+                change=change,
+                multi_currency_payments=multi_currency_payments,
+                insert_only=True,
+            )
             invoice_name = inv.get("name") if isinstance(inv, dict) else inv
-            
+
             if not invoice_name:
                 return {
                     "success": False,
@@ -4536,120 +4535,49 @@ def create_invoice_and_payment_queue(payload=None, **kwargs):
                 "message": "Failed to create sales invoice",
                 "details": str(inv_error),
             }
-        
-        # Check if payment method is credit - if so, commit invoice before creating HA Order
-        is_credit = False
-        try:
-            # Check for credit payment method
-            if payment_method:
-                is_credit = is_payment_method_credit(payment_method)
-            elif payment_breakdown and isinstance(payment_breakdown, list):
-                # Check if any payment in breakdown is credit
-                for p in payment_breakdown:
-                    if isinstance(p, dict) and float(p.get("amount", 0) or 0) > 0:
-                        if is_payment_method_credit(p.get("payment_method")):
-                            is_credit = True
-                            break
-            elif multi_currency_payments and isinstance(multi_currency_payments, dict):
-                # Check if any payment in multi-currency is credit
-                for _, info in multi_currency_payments.items():
-                    if isinstance(info, dict) and float(info.get("amount", 0) or 0) > 0:
-                        if is_payment_method_credit(info.get("mode")):
-                            is_credit = True
-                            break
-        except Exception as credit_check_error:
-            # If credit check fails, log but continue (assume not credit)
-            frappe.log_error(f"Error checking credit status: {str(credit_check_error)}", "Credit Check Error")
-            is_credit = False
-        
-        # For credit payments, commit invoice immediately so it's available when creating HA Order
-        if is_credit:
-            frappe.db.commit()
-            frappe.logger().info(f"Committed invoice {invoice_name} for credit payment before HA Order creation")
-        
-        # 2. Process payment entries (try background, fallback to synchronous)
-        # Try to enqueue in background first, but if queue fails, process immediately
-        payment_processed_async = False
-        job_id = None
-        
-        try:
-            # Prepare job arguments for payment processing only
-            job_kwargs = {
-                "method": "havano_restaurant_pos.havano_restaurant_pos.api.process_payment_entries",
-                "queue": "default",
-                "timeout": 300,
-                "is_async": True,  # True background processing
-                "invoice_name": invoice_name,
-                "payment_breakdown": payment_breakdown,
-                "payment_method": payment_method,
-                "amount": amount,
-                "note": note,
-                "order_payload": order_payload,
-                "multi_currency_payments": multi_currency_payments
-            }
-            
-            # Add job_name if supported (optional parameter)
+
+        # Commit invoice immediately so it's visible for download
+        frappe.db.commit()
+
+        # 2. Run submit + payment + HA order in background thread (return immediately)
+        # Always use thread so process_payment_entries runs even without queue worker
+        import threading
+        import copy
+        _site = frappe.local.site
+        _invoice_name = invoice_name
+        _payment_breakdown = copy.deepcopy(payment_breakdown) if payment_breakdown else None
+        _payment_method = payment_method
+        _amount = amount
+        _note = note
+        _order_payload = copy.deepcopy(order_payload) if order_payload else None
+        _multi_currency_payments = copy.deepcopy(multi_currency_payments) if multi_currency_payments else None
+
+        def run_process_payment_entries():
             try:
-                job_kwargs["job_name"] = f"process_payment_entries_{invoice_name}_{frappe.utils.now_datetime().strftime('%Y%m%d%H%M%S')}"
-            except:
-                pass  # job_name not supported in this Frappe version
-            
-            job = frappe.enqueue(**job_kwargs)
-            job_id = job.id if hasattr(job, 'id') else (job if isinstance(job, str) else None)
-            payment_processed_async = True
-            
-            frappe.logger().info(f"Payment entries queued for invoice {invoice_name}, job_id: {job_id}")
-            
-        except Exception as queue_error:
-            # Log the error - will process synchronously below
-            error_msg = f"Queue enqueue failed for payment entries: {str(queue_error)}\n{frappe.get_traceback()}"
-            frappe.log_error(error_msg, "Create Payment Entries Queue Error")
-            payment_processed_async = False
-        
-        # Process payment entries synchronously (either as fallback or always for reliability)
-        # This ensures payments are always created even if queue worker isn't running
-        try:
-            payment_result = process_payment_entries(
-                invoice_name,
-                payment_breakdown,
-                payment_method,
-                amount,
-                note,
-                order_payload,
-                multi_currency_payments
-            )
-            
-            if payment_processed_async:
-                # Queue was successful, but we also processed synchronously for reliability
-                # In production, you might want to remove this and rely on queue only
-                return {
-                    "success": True,
-                    "message": "Sales invoice created successfully. Payment entries processed.",
-                    "sales_invoice": invoice_name,
-                    "job_id": job_id,
-                    "payment_result": payment_result,
-                    "status": "invoice_created_payment_processed"
-                }
-            else:
-                # Queue failed, processed synchronously
-                return {
-                    "success": True,
-                    "message": "Sales invoice and payment entries created successfully (processed synchronously - queue unavailable)",
-                    "sales_invoice": invoice_name,
-                    "payment_result": payment_result,
-                    "queue_failed": True
-                }
-        except Exception as sync_error:
-            # Invoice was created but payment failed
-            error_msg = f"Payment processing failed after invoice creation: {str(sync_error)}\n{frappe.get_traceback()}"
-            frappe.log_error(error_msg, "Create Payment Entries Sync Error")
-            return {
-                "success": True,  # Invoice was created successfully
-                "message": f"Sales invoice created successfully, but payment processing failed: {str(sync_error)}",
-                "sales_invoice": invoice_name,
-                "payment_error": str(sync_error),
-                "warning": "Please process payment manually for this invoice"
-            }
+                frappe.connect(site=_site)
+                process_payment_entries(
+                    _invoice_name,
+                    _payment_breakdown,
+                    _payment_method,
+                    _amount,
+                    _note,
+                    _order_payload,
+                    _multi_currency_payments,
+                )
+                frappe.db.commit()
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Process Payment Entries (Background Thread)")
+            finally:
+                frappe.destroy()
+
+        t = threading.Thread(target=run_process_payment_entries, daemon=True)
+        t.start()
+
+        return {
+            "success": True,
+            "message": "Sales invoice created. Submit and payment processing in background.",
+            "sales_invoice": invoice_name,
+        }
         
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Create Invoice and Payment Queue Error")
@@ -4670,6 +4598,7 @@ def process_payment_entries(
     multi_currency_payments=None
 ):
     """Background job to create payment entries for an existing sales invoice.
+    Submits the invoice first if it is draft (docstatus=0).
     This runs asynchronously in the queue.
     IMPORTANT: This function must be callable from frappe.enqueue.
     """
@@ -4689,6 +4618,16 @@ def process_payment_entries(
                 "message": "Invoice not found",
                 "details": error_msg,
             }
+
+        # Submit invoice if still draft (insert_only flow)
+        docstatus = frappe.db.get_value(invoice_doctype, invoice_name, "docstatus")
+        if docstatus == 0:
+            inv = frappe.get_doc(invoice_doctype, invoice_name)
+            frappe.flags.havano_pos_invoice = True
+            try:
+                inv.submit()
+            finally:
+                frappe.flags.pop("havano_pos_invoice", None)
         
         # Create Payment Entries
         result = None
