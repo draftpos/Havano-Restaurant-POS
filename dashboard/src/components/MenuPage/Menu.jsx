@@ -34,6 +34,7 @@ const Menu = () => {
     hide_room_select: false,
     hide_agent_select: false,
     hide_customer_select: false,
+    hide_mix: false,
   });
 
   const {
@@ -131,7 +132,7 @@ const Menu = () => {
 
   useEffect(() => {
     const handleF3Click = (event) => {
-      if (event.key === "F3") {
+      if (event.key === "F3" && !hideSelects.hide_mix) {
         event.preventDefault();
         setOpenMixDialog(true);
       }
@@ -140,7 +141,7 @@ const Menu = () => {
     return () => {
       window.removeEventListener("keydown", handleF3Click);
     }
-  })
+  }, [hideSelects.hide_mix])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -228,6 +229,7 @@ useEffect(() => {
         <p className="text-2xl my-4 shrink-0">{selectedCategory?.name || "Menu"}</p>
 
         <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 justify-end">
+          {!hideSelects.hide_mix && (
           <Button
             variant={"outline"}
             onClick={() => setOpenMixDialog(true)}
@@ -235,6 +237,7 @@ useEffect(() => {
           >
             Mix (F3)
           </Button>
+          )}
 
           <Select
             value={transactionType}

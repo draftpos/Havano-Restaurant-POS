@@ -13,6 +13,7 @@
   "hide_room_select",
   "hide_agent_select",
   "hide_customer_select",
+  "hide_mix",
   "column_break_rork",
   "default_price_list",
   "default_payment_method",
@@ -113,6 +114,12 @@
    "fieldname": "hide_customer_select",
    "fieldtype": "Check",
    "label": "Hide Customer Select"
+  },
+  {
+   "default": "0",
+   "fieldname": "hide_mix",
+   "fieldtype": "Check",
+   "label": "Hide Mix"
   }
  ],
  "grid_page_length": 50,
