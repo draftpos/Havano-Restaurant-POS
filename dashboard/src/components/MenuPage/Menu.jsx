@@ -5,6 +5,7 @@ import MenuItemCard from "@/components/MenuPage/MenuItemCard";
 import { useMenuContext } from "@/contexts/MenuContext";
 
 import { useAgents, useRooms } from "@/hooks";
+import { filterMenuItemsByTerm } from "@/hooks/useFilteredMenuItems";
 import { isRoomDirectBookingsEnabled, getHideSelectSettings } from "@/lib/utils";
 import ShiftDialog from "@/components/ui/ShiftDialog"; // adjust path if needed
 import {
@@ -51,6 +52,8 @@ const Menu = () => {
     fetchCustomers,
     availableTransactionTypes,
     filteredItems,
+    menuItems,
+    selectedCategoryId,
     addToCart,
     selectedAgent,
     setSelectedAgent,
@@ -69,7 +72,7 @@ const Menu = () => {
   const { rooms, loading: loadingRooms, fetchRooms } = useRooms();
 
   const [openMixDialog, setOpenMixDialog] = useState(false);
-  
+
   const searchInputRef = useRef(null);
 
    useEffect(() => {
@@ -373,26 +376,32 @@ useEffect(() => {
               type="text"
               ref={searchInputRef}
               autoFocus
-              placeholder="Search"
+              placeholder="Search or scan barcode"
               className="w-[200px] focus:outline-none focus:ring-0 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && filteredItems.length > 0) {
+                if (e.key === "Enter") {
                   e.preventDefault();
                   e.stopPropagation();
-                  const index = Math.min(currentIndex, filteredItems.length - 1);
-                  if (index < 0) return;
-                  const item = filteredItems[index];
-                  addToCart({
-                    name: item.name,
-                    item_name: item.item_name,
-                    custom_menu_category: item.custom_menu_category,
-                    quantity: 1,
-                    price: item.standard_rate ?? item.price ?? 0,
-                    standard_rate: item.standard_rate ?? item.price ?? 0,
-                    remark: "",
-                  });
+                  const currentValue = (e.target.value || "").trim();
+                  const itemsToUse = currentValue
+                    ? filterMenuItemsByTerm(menuItems, currentValue, selectedCategoryId)
+                    : filteredItems;
+                  if (itemsToUse.length > 0) {
+                    const index = Math.min(currentIndex, itemsToUse.length - 1);
+                    const item = itemsToUse[Math.max(0, index)];
+                    addToCart({
+                      name: item.name,
+                      item_name: item.item_name,
+                      custom_menu_category: item.custom_menu_category,
+                      quantity: 1,
+                      price: item.standard_rate ?? item.price ?? 0,
+                      standard_rate: item.standard_rate ?? item.price ?? 0,
+                      remark: "",
+                    });
+                    if (currentValue) setSearchTerm("");
+                  }
                 }
               }}
               onBlur={(e) => {

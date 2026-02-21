@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ScanBarcode } from "lucide-react";
 
 import Clock from "@/components/HomePage/Clock";
 import OrdersList from "@/components/HomePage/OrdersList";
 import Container from "@/components/Shared/Container";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardAction,
@@ -15,6 +17,7 @@ import {
 import {
   formatCurrency,
   getCurrentUserFullName,
+  getItemByBarcode,
   getNumberOfOrders,
   isRestaurantMode,
 } from "@/lib/utils";
@@ -28,6 +31,10 @@ const Home = () => {
   const [userName, setUserName] = useState(null);
   const [popularItems, setPopularItems] = useState([]);
   const [restModeEnabled, setRestModeEnabled] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeSearching, setBarcodeSearching] = useState(false);
+  const [barcodeError, setBarcodeError] = useState(null);
+  const barcodeInputRef = useRef(null);
 
 
   useEffect(() => {
@@ -123,6 +130,35 @@ const Home = () => {
     navigate("/menu");
   };
 
+  const handleBarcodeSearch = async (e) => {
+    e?.preventDefault?.();
+    const code = barcodeInput.trim();
+    if (!code) return;
+    setBarcodeSearching(true);
+    setBarcodeError(null);
+    try {
+      const item = await getItemByBarcode(code);
+      if (item) {
+        startNewTakeAwayOrder();
+        addToCart({
+          ...item,
+          quantity: 1,
+          price: item.standard_rate ?? item.price ?? 0,
+          standard_rate: item.standard_rate ?? item.price ?? 0,
+        });
+        setBarcodeInput("");
+        navigate("/menu");
+      } else {
+        setBarcodeError("Item not found");
+      }
+    } catch (err) {
+      setBarcodeError("Search failed");
+    } finally {
+      setBarcodeSearching(false);
+      barcodeInputRef.current?.focus();
+    }
+  };
+
   const noOrdersYet =
     popularItems.length > 0 &&
     popularItems.every((item) => (item.orderCount ?? 0) === 0);
@@ -143,7 +179,43 @@ const Home = () => {
                 <Clock />
               </div>
             </div>
-            <div className="flex items-center gap-4 py-8">
+            <form
+              onSubmit={handleBarcodeSearch}
+              className="flex items-center gap-2 py-4"
+            >
+              <div className="relative flex-1 max-w-xs">
+                <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={barcodeInputRef}
+                  type="text"
+                  placeholder="Scan or type barcode..."
+                  value={barcodeInput}
+                  onChange={(e) => {
+                    setBarcodeInput(e.target.value);
+                    setBarcodeError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleBarcodeSearch(e);
+                    }
+                  }}
+                  disabled={barcodeSearching}
+                  className="pl-9"
+                  autoComplete="off"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={!barcodeInput.trim() || barcodeSearching}
+              >
+                {barcodeSearching ? "Searching..." : "Search"}
+              </Button>
+              {barcodeError && (
+                <span className="text-sm text-destructive">{barcodeError}</span>
+              )}
+            </form>
+            <div className="flex items-center gap-4 py-4">
               <Button
                 size="lg"
                 onClick={() => {

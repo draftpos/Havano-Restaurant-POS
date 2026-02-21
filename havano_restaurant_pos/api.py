@@ -351,6 +351,56 @@ def get_booked_rooms():
 
 
 @frappe.whitelist()
+def get_item_by_barcode(barcode=None):
+    """
+    Look up an item by barcode. Returns item with user pricing if found and visible in POS.
+    """
+    if not barcode or not str(barcode).strip():
+        return None
+    barcode = str(barcode).strip()
+    try:
+        item_code = frappe.db.get_value(
+            "Item Barcode",
+            {"barcode": barcode},
+            "parent"
+        )
+        if not item_code:
+            return None
+        items = frappe.get_all(
+            "Item",
+            filters={
+                "name": item_code,
+                "disabled": 0,
+                "custom_do_not_show_in_pos": 0,
+            },
+            fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"],
+            limit=1,
+        )
+        item = items[0] if items else None
+        if not item:
+            return None
+        user = frappe.session.user
+        settings = frappe.get_single("HA POS Settings")
+        user_price_list = None
+        for row in settings.user_mapping:
+            if row.user == user:
+                user_price_list = row.price_list
+                break
+        if user_price_list:
+            rate = frappe.db.get_value(
+                "Item Price",
+                {"item_code": item_code, "price_list": user_price_list},
+                "price_list_rate"
+            )
+            if rate is not None:
+                item["standard_rate"] = rate
+        return item
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Get Item By Barcode Error")
+        return None
+
+
+@frappe.whitelist()
 def search_items(search_term=None):
     """Search for items by name or code"""
     filters = {"disabled": 0}
@@ -4470,6 +4520,14 @@ def get_menu_items_with_user_prices():
             user_price_list = row.price_list
             break
 
+    # get item groups hidden from POS
+    hidden_groups = frappe.get_all(
+        "Item Group",
+        filters={"custom_do_not_show_in_pos": 1},
+        pluck="name"
+    )
+    hidden_groups = set(hidden_groups or [])
+
     # fetch all menu items visible in POS
     items = frappe.get_all(
         "Item",
@@ -4479,6 +4537,10 @@ def get_menu_items_with_user_prices():
         },
         fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
     )
+
+    # exclude items whose item_group has do_not_show_in_pos
+    if hidden_groups:
+        items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
 
     # fetch item prices in one go
     item_prices = {}
@@ -4490,9 +4552,21 @@ def get_menu_items_with_user_prices():
         )
         item_prices = {p.item_code: p.price_list_rate for p in price_data}
 
-    # attach price to each item
+    # fetch barcodes for all items (for search by scan)
+    item_codes = [i["name"] for i in items]
+    barcode_rows = frappe.get_all(
+        "Item Barcode",
+        filters={"parent": ["in", item_codes]},
+        fields=["parent", "barcode"]
+    )
+    barcodes_by_item = {}
+    for row in barcode_rows:
+        barcodes_by_item.setdefault(row["parent"], []).append(row.get("barcode") or "")
+
+    # attach price and barcodes to each item
     for item in items:
         item["standard_rate"] = item_prices.get(item["name"], item["standard_rate"])
+        item["barcodes"] = barcodes_by_item.get(item["name"], [])
 
     return items
 

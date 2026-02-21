@@ -56,6 +56,9 @@ const data = await db.getDocList("Item", {
     try {
       const item_groups = await db.getDocList("Item Group", {
         fields: ["name", "item_group_name"],
+        filters: [
+          ["or", ["custom_do_not_show_in_pos", "=", 0], ["custom_do_not_show_in_pos", "is", "not set"]],
+        ],
       });
       const data = item_groups.map((group) => ({
         name: group.name,

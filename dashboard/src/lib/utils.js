@@ -211,6 +211,19 @@ export async function isHotelAppInstalled() {
   }
 }
 
+export async function getItemByBarcode(barcode) {
+  try {
+    const { message } = await call.get(
+      "havano_restaurant_pos.api.get_item_by_barcode",
+      { barcode }
+    );
+    return message || null;
+  } catch (err) {
+    console.error("Error fetching item by barcode:", err);
+    return null;
+  }
+}
+
 export async function getNumberOfOrders(menuItem) {
   if (!menuItem) {
     console.warn("getNumberOfOrders called without a menu item identifier.");
