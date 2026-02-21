@@ -55,15 +55,14 @@ const data = await db.getDocList("Item", {
     set({ loading: true, error: null });
     try {
       const item_groups = await db.getDocList("Item Group", {
-        fields: ["name", "item_group_name"],
-        filters: [
-          ["or", ["custom_do_not_show_in_pos", "=", 0], ["custom_do_not_show_in_pos", "is", "not set"]],
-        ],
+        fields: ["name", "item_group_name", "custom_do_not_show_in_pos"],
       });
-      const data = item_groups.map((group) => ({
-        name: group.name,
-        category_name: group.item_group_name,
-      }));
+      const data = item_groups
+        .filter((group) => !group.custom_do_not_show_in_pos)
+        .map((group) => ({
+          name: group.name,
+          category_name: group.item_group_name,
+        }));
       set({ menuCategories: data, loading: false });
     } catch (err) {
       console.error("Fetch error:", err);
