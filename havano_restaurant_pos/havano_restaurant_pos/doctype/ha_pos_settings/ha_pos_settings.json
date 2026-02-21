@@ -10,6 +10,9 @@
   "restaurant_mode",
   "allow_negative_stock",
   "enable_room_direct_bookings",
+  "hide_room_select",
+  "hide_agent_select",
+  "hide_customer_select",
   "column_break_rork",
   "default_price_list",
   "default_payment_method",
@@ -92,6 +95,24 @@
    "fieldname": "enable_room_direct_bookings",
    "fieldtype": "Check",
    "label": "Enable Room Direct Bookings"
+  },
+  {
+   "default": "0",
+   "fieldname": "hide_room_select",
+   "fieldtype": "Check",
+   "label": "Hide Room Select"
+  },
+  {
+   "default": "0",
+   "fieldname": "hide_agent_select",
+   "fieldtype": "Check",
+   "label": "Hide Agent Select"
+  },
+  {
+   "default": "0",
+   "fieldname": "hide_customer_select",
+   "fieldtype": "Check",
+   "label": "Hide Customer Select"
   }
  ],
  "grid_page_length": 50,

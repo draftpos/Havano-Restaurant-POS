@@ -26,7 +26,7 @@ def get_pos_user_defaults():
 
 def get_last_open_shift_for_current_user():
     current_user = frappe.session.user
-    
+
     shift = frappe.get_all(
         "HA Shift POS",
         filters={
@@ -36,11 +36,12 @@ def get_last_open_shift_for_current_user():
         order_by="shift_start desc",
         limit_page_length=1
     )
-    
+
     if shift:
-        return shift[0]  # Last open shift
-    else:
-        return None      # No open shift found
+        # Return docname string only - get_all returns list of dicts, Link fields need string
+        s = shift[0]
+        return s.get("name") if isinstance(s, dict) else s
+    return None
 
 @frappe.whitelist()
 def create_sales_invoice(customer, items, price_list=None, change=None, multi_currency_payments=None, insert_only=False):

@@ -5,7 +5,7 @@ import MenuItemCard from "@/components/MenuPage/MenuItemCard";
 import { useMenuContext } from "@/contexts/MenuContext";
 
 import { useAgents, useRooms } from "@/hooks";
-import { isRoomDirectBookingsEnabled } from "@/lib/utils";
+import { isRoomDirectBookingsEnabled, getHideSelectSettings } from "@/lib/utils";
 import ShiftDialog from "@/components/ui/ShiftDialog"; // adjust path if needed
 import {
   Select,
@@ -30,6 +30,11 @@ const Menu = () => {
   const [hasActiveShift, setHasActiveShift] = useState(true);
   const [roomBookingsEnabled, setRoomBookingsEnabled] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [hideSelects, setHideSelects] = useState({
+    hide_room_select: false,
+    hide_agent_select: false,
+    hide_customer_select: false,
+  });
 
   const {
     fetchMenuItems,
@@ -108,6 +113,14 @@ const Menu = () => {
       setRoomBookingsEnabled(Boolean(enabled));
     };
     checkRoomBookings();
+  }, []);
+
+  useEffect(() => {
+    const fetchHideSelects = async () => {
+      const settings = await getHideSelectSettings();
+      setHideSelects(settings);
+    };
+    fetchHideSelects();
   }, []);
 
   useEffect(() => {
@@ -246,34 +259,37 @@ useEffect(() => {
               ))}
             </SelectContent>
           </Select>
-          <Combobox
-            type="agent"
-            options={agents.map((agent) => ({
-              value: agent.name,
-              name: agent.name,
-              label: agent.full_name,
-            }))}
-            value={selectedAgent}
-            onValueChange={setSelectedAgent}
-            placeholder={
-              isFetchingAgents ? "Loading agents..." : "Select agent"
-            }
-            searchPlaceholder="Search agent..."
-            disabled={isFetchingAgents}
-            className="w-[200px]"
-            onCreate
-            onCreated={(newAgent) => {
-              fetchAgents();
-              setSelectedAgent(newAgent.value);
-            }}
-            onOpenChange={(open) => {
-              if (!open && target === "menu") {
-                requestAnimationFrame(() => {
-                  searchInputRef.current?.focus();
-                });
+          {!hideSelects.hide_agent_select && (
+            <Combobox
+              type="agent"
+              options={agents.map((agent) => ({
+                value: agent.name,
+                name: agent.name,
+                label: agent.full_name,
+              }))}
+              value={selectedAgent}
+              onValueChange={setSelectedAgent}
+              placeholder={
+                isFetchingAgents ? "Loading agents..." : "Select agent"
               }
-            }}
-          />
+              searchPlaceholder="Search agent..."
+              disabled={isFetchingAgents}
+              className="w-[200px]"
+              onCreate
+              onCreated={(newAgent) => {
+                fetchAgents();
+                setSelectedAgent(newAgent.value);
+              }}
+              onOpenChange={(open) => {
+                if (!open && target === "menu") {
+                  requestAnimationFrame(() => {
+                    searchInputRef.current?.focus();
+                  });
+                }
+              }}
+            />
+          )}
+          {!hideSelects.hide_customer_select && (
           <Combobox
             type="customer"
             options={customers.map((cust) => ({
@@ -307,7 +323,8 @@ useEffect(() => {
               }
             }}
           />
-          {roomBookingsEnabled && (
+          )}
+          {roomBookingsEnabled && !hideSelects.hide_room_select && (
             <Combobox
               type="room"
               options={rooms.map((room) => ({

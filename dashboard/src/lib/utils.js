@@ -382,6 +382,29 @@ export async function isRoomDirectBookingsEnabled() {
 }
 
 /**
+ * Get hide-select settings from HA POS Settings.
+ * @returns {Promise<{hide_room_select: boolean, hide_agent_select: boolean, hide_customer_select: boolean}>}
+ */
+export async function getHideSelectSettings() {
+  try {
+    const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+    const doc = settingsResponse?.message?.data;
+    if (!doc) {
+      return { hide_room_select: false, hide_agent_select: false, hide_customer_select: false };
+    }
+    const toBool = (v) => Boolean(v && (v === 1 || v === "1" || v === true));
+    return {
+      hide_room_select: toBool(doc.hide_room_select),
+      hide_agent_select: toBool(doc.hide_agent_select),
+      hide_customer_select: toBool(doc.hide_customer_select),
+    };
+  } catch (err) {
+    console.error("Error fetching hide select settings:", err);
+    return { hide_room_select: false, hide_agent_select: false, hide_customer_select: false };
+  }
+}
+
+/**
  * Get user transaction type mappings from HA POS Setting
  * Returns array of transaction types available for the current user
  * @returns {Promise<{types: string[], defaultType: string | null}>}

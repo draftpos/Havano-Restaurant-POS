@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import TransactionItemCard from "@/components/TransactionCreation/TransactionItemCard";
 import { useTransactionCreationStore } from "@/stores/useTransactionCreationStore";
-import { getCustomers } from "@/lib/utils";
+import { getCustomers, getHideSelectSettings } from "@/lib/utils";
 import { Combobox } from "../ui/combobox";
 import { toast } from "sonner";
 
@@ -13,10 +13,19 @@ const TransactionItems = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [hideCustomerSelect, setHideCustomerSelect] = useState(false);
 
   useEffect(() => {
     fetchMenuItems();
   }, [fetchMenuItems]);
+
+  useEffect(() => {
+    const fetchHideSelects = async () => {
+      const settings = await getHideSelectSettings();
+      setHideCustomerSelect(settings.hide_customer_select);
+    };
+    fetchHideSelects();
+  }, []);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -62,6 +71,7 @@ const TransactionItems = () => {
       <div className="flex items-center justify-between gap-4">
         <p className="text-2xl my-4">{selectedCategory?.name || "Items"}</p>
         <div className="flex items-center gap-2 flex-1 justify-end">
+          {!hideCustomerSelect && (
           <Combobox
             options={customers.map((cust) => ({
               value: cust.name,
@@ -90,6 +100,7 @@ const TransactionItems = () => {
               handleCustomerChange(newCustomer.value);
             }}
           />
+          )}
           <div className="flex items-center w-1/3 bg-background px-2 py-1 rounded-sm focus-within:ring-2 focus-within:ring-primary focus-within:border-primary">
             <input
               type="text"

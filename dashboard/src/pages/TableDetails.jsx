@@ -46,7 +46,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { db } from "@/lib/frappeClient";
-import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment, getCurrentUser, isRoomDirectBookingsEnabled } from "@/lib/utils";
+import { formatCurrency, markTableAsPaid, getCustomers, getDefaultCustomer, processTablePayment, getCurrentUser, isRoomDirectBookingsEnabled, getHideSelectSettings } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
 import { useTableStore } from "@/stores/useTableStore";
@@ -66,6 +66,11 @@ const TableDetails = () => {
   const [loadingWaiters, setLoadingWaiters] = useState(false);
   const [roomBookingsEnabled, setRoomBookingsEnabled] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [hideSelects, setHideSelects] = useState({
+    hide_room_select: false,
+    hide_agent_select: false,
+    hide_customer_select: false,
+  });
   const navigate = useNavigate();
   const { id } = useParams();
   const { register, setValue, watch } = useForm({
@@ -129,6 +134,14 @@ const TableDetails = () => {
       setRoomBookingsEnabled(Boolean(enabled));
     };
     checkRoomBookings();
+  }, []);
+
+  useEffect(() => {
+    const fetchHideSelects = async () => {
+      const settings = await getHideSelectSettings();
+      setHideSelects(settings);
+    };
+    fetchHideSelects();
   }, []);
 
   useEffect(() => {
@@ -466,6 +479,7 @@ const TableDetails = () => {
               <CardContent>
                 <form onSubmit={handleTableAction}>
                   <div className="flex flex-col gap-4">
+                    {!hideSelects.hide_customer_select && (
                     <div className="space-y-4">
                       <Label>Customer Name</Label>
                       <Combobox
@@ -511,7 +525,8 @@ const TableDetails = () => {
                         }}
                       />
                     </div>
-                    {roomBookingsEnabled && (
+                    )}
+                    {roomBookingsEnabled && !hideSelects.hide_room_select && (
                       <div className="space-y-4">
                         <Label>Select Room</Label>
                         <Combobox
@@ -550,6 +565,7 @@ const TableDetails = () => {
                         />
                       </div>
                     )}
+                    {!hideSelects.hide_agent_select && (
                     <div className="space-y-4">
                       <Label>Waiter</Label>
                       <Select
@@ -581,6 +597,7 @@ const TableDetails = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    )}
                     <div className="space-y-4">
                       <Label>Remarks</Label>
                       <Textarea
