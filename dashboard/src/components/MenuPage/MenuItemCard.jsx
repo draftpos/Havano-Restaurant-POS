@@ -157,12 +157,12 @@ const handleAddToCart = async () => {
           addingItemName === item.name && "pointer-events-none opacity-70"
         )}
       >
-        <CardHeader className="flex flex-col items-center gap-2 px-3 py-1">
+        <CardHeader className="flex flex-col items-center gap-2 px-3 py-1 w-full">
           {imageUrl && (
             <img
               src={imageUrl}
               alt={item.item_name}
-              className="w-10 h-10 object-cover rounded-md flex-shrink-0"
+              className="w-full aspect-square object-cover rounded-md flex-shrink-0"
             />
           )}
           <CardTitle className="break-words text-center whitespace-normal text-sm leading-tight w-full">

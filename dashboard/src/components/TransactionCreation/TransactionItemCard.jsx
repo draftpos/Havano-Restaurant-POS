@@ -28,12 +28,12 @@ const TransactionItemCard = ({ item }) => {
       onClick={handleAddToCart}
       className="cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50"
     >
-      <CardHeader className="flex flex-col items-center gap-2">
+      <CardHeader className="flex flex-col items-center gap-2 w-full">
         {imageUrl && (
           <img
             src={imageUrl}
             alt={item.item_name}
-            className="w-10 h-10 object-cover rounded-md flex-shrink-0"
+            className="w-full aspect-square object-cover rounded-md flex-shrink-0"
           />
         )}
         <CardTitle className="text-sm text-center w-full">{item.item_name}</CardTitle>
