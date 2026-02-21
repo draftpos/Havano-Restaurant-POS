@@ -87,6 +87,7 @@ const OrderDetailsDialog = ({
           "table",
           "waiter",
           "order_type",
+          "order_status",
           "total_price",
           "order_items",
         ],
@@ -297,19 +298,23 @@ const OrderDetailsDialog = ({
         )}
 
         <DialogFooter>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={deleting || !orderId}
-          >
-            Delete
-          </Button>
-          <Button 
-            onClick={handleEdit} 
-            disabled={!orderId || creatingQuotation}
-          >
-            {order?.order_type === "Quotation" ? "Create Quotation" : "Edit Order"}
-          </Button>
+          {order?.order_status !== "Closed" && (
+            <>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting || !orderId}
+              >
+                Delete
+              </Button>
+              <Button
+                onClick={handleEdit}
+                disabled={!orderId || creatingQuotation}
+              >
+                {order?.order_type === "Quotation" ? "Create Quotation" : "Edit Order"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

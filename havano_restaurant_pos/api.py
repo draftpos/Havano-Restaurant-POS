@@ -465,6 +465,146 @@ import frappe
 from frappe.utils.data import now_datetime
 
 @frappe.whitelist()
+def get_orders_paginated(
+    order_status=None,
+    waiter=None,
+    from_date=None,
+    to_date=None,
+    limit_start=0,
+    limit_page_length=20,
+):
+    """
+    Server-side paginated orders API.
+    Returns orders with filters applied, total count, and filter options for UI.
+    """
+    try:
+        limit_start = int(limit_start) if limit_start is not None else 0
+        limit_page_length = int(limit_page_length) if limit_page_length is not None else 20
+        limit_page_length = min(limit_page_length, 100)
+
+        filters = []
+        if order_status and order_status != "__all__":
+            filters.append(["order_status", "=", order_status])
+        if waiter and waiter != "__all__":
+            filters.append(["waiter", "=", waiter])
+        if from_date:
+            filters.append(["creation", ">=", from_date])
+        if to_date:
+            filters.append(["creation", "<=", to_date])
+
+        # Build base filters for date range (for filter options)
+        date_filters = []
+        if from_date:
+            date_filters.append(["creation", ">=", from_date])
+        if to_date:
+            date_filters.append(["creation", "<=", to_date])
+
+        # Get total count
+        total = frappe.db.count("HA Order", filters=filters or None)
+
+        # Get orders for current page
+        orders = frappe.get_all(
+            "HA Order",
+            filters=filters if filters else None,
+            fields=[
+                "name",
+                "table",
+                "order_status",
+                "total_price",
+                "waiter",
+                "creation",
+            ],
+            order_by="creation desc",
+            limit_start=limit_start,
+            limit_page_length=limit_page_length,
+        )
+
+        # Get tables and waiters for lookup
+        tables = frappe.get_all(
+            "HA Table",
+            fields=["name", "table_number"],
+        )
+        table_map = {t["name"]: t["table_number"] for t in tables}
+
+        waiters = frappe.get_all(
+            "HA Waiter",
+            fields=["name", "waiter_name"],
+        )
+        waiter_map = {w["name"]: w.get("waiter_name") or w["name"] for w in waiters}
+
+        # Merge table_number and waiter_name into orders
+        merged = []
+        for o in orders:
+            merged.append({
+                **o,
+                "table_number": table_map.get(o.get("table")) or None,
+                "waiter_name": waiter_map.get(o.get("waiter")) or o.get("waiter") or None,
+            })
+
+        # Get filter options (statuses, waiters) for the date range - only on first page
+        status_options = []
+        waiter_options = []
+        if limit_start == 0:
+            # Build date conditions for filter options
+            date_conds = []
+            date_params = {}
+            if from_date:
+                date_conds.append("creation >= %(from_date)s")
+                date_params["from_date"] = from_date
+            if to_date:
+                date_conds.append("creation <= %(to_date)s")
+                date_params["to_date"] = to_date
+            date_sql = " AND " + " AND ".join(date_conds) if date_conds else ""
+
+            # Get distinct order_status values
+            status_rows = frappe.db.sql(
+                f"""
+                SELECT DISTINCT order_status FROM `tabHA Order`
+                WHERE order_status IS NOT NULL AND order_status != ''{date_sql}
+                """,
+                date_params,
+                as_dict=True,
+            )
+            status_options = sorted(
+                s["order_status"] for s in status_rows if s.get("order_status")
+            )
+
+            # Get distinct waiter values with names
+            waiter_rows = frappe.db.sql(
+                f"""
+                SELECT DISTINCT waiter FROM `tabHA Order`
+                WHERE waiter IS NOT NULL AND waiter != ''{date_sql}
+                ORDER BY waiter
+                """,
+                date_params,
+                as_dict=True,
+            )
+            waiter_ids = [r["waiter"] for r in waiter_rows if r.get("waiter")]
+            waiter_options = [
+                {"value": wid, "label": waiter_map.get(wid) or wid}
+                for wid in waiter_ids
+            ]
+
+        return {
+            "success": True,
+            "data": merged,
+            "total": total,
+            "status_options": status_options,
+            "waiter_options": waiter_options,
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Get Orders Paginated Error")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": [],
+            "total": 0,
+            "status_options": [],
+            "waiter_options": [],
+        }
+
+
+@frappe.whitelist()
 def get_table_orders(table_number):
     """
     Returns:

@@ -466,6 +466,29 @@ export async function getUserTransactionTypes() {
   }
 }
 
+/**
+ * Fetch paginated orders from server.
+ * @param {Object} params - { order_status, waiter, from_date, to_date, limit_start, limit_page_length }
+ * @returns {Promise<{ data: Array, total: number, status_options: string[], waiter_options: Array }>}
+ */
+export async function getOrdersPaginated(params = {}) {
+  try {
+    const { message } = await call.get("havano_restaurant_pos.api.get_orders_paginated", params);
+    if (message && message.success === false) {
+      throw new Error(message.error || "Failed to fetch orders");
+    }
+    return {
+      data: message?.data || [],
+      total: message?.total ?? 0,
+      status_options: message?.status_options || [],
+      waiter_options: message?.waiter_options || [],
+    };
+  } catch (err) {
+    console.error("Error fetching paginated orders:", err);
+    throw err;
+  }
+}
+
 export async function callPut(endpoint, data = {}) {
   try {
     const { data: response } = await db.axios.put(endpoint, data);

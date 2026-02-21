@@ -25,145 +25,104 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { useOrderStore } from "@/stores/useOrderStore";
+import {
+  formatCurrency,
+  formatDateTime,
+  getOrdersPaginated,
+} from "@/lib/utils";
 
 const ALL_OPTION = "__all__";
+const PAGE_SIZE = 20;
 
 const Orders = () => {
-  const {
-    orders,
-    loading: orderLoading,
-    error: orderError,
-    fetchOrders,
-  } = useOrderStore();
+  const [orders, setOrders] = useState([]);
+  const [orderLoading, setOrderLoading] = useState(true);
+  const [orderError, setOrderError] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [waiterOptions, setWaiterOptions] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [waiterFilter, setWaiterFilter] = useState(ALL_OPTION);
-  const [statusFilter, setStatusFilter] = useState("Unpaid");
+  const [statusFilter, setStatusFilter] = useState(ALL_OPTION);
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const endOfToday = new Date(today);
     endOfToday.setHours(23, 59, 59, 999);
-
-    return {
-      from: today,
-      to: endOfToday,
-    };
+    return { from: today, to: endOfToday };
   });
   const [draftDateRange, setDraftDateRange] = useState(dateRange);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  const statusOptions = useMemo(() => {
-    const statuses = new Set();
-    orders.forEach((order) => {
-      if (order.order_status) {
-        statuses.add(order.order_status);
-      }
-    });
-    return Array.from(statuses);
-  }, [orders]);
-
-  const waiterOptions = useMemo(() => {
-    const waiters = new Map();
-    orders.forEach((order) => {
-      if (order.waiter) {
-        waiters.set(order.waiter, order.waiter_name || order.waiter);
-      } else if (order.waiter_name) {
-        waiters.set(order.waiter_name, order.waiter_name);
-      }
-    });
-    return Array.from(waiters.entries());
-  }, [orders]);
-
   const normalizedDateRange = useMemo(() => {
-    if (!dateRange?.from && !dateRange?.to) {
-      return null;
-    }
-
+    if (!dateRange?.from && !dateRange?.to) return null;
     const fromDate = dateRange?.from ? new Date(dateRange.from) : null;
     const toDate = dateRange?.to ? new Date(dateRange.to) : null;
-
-    if (fromDate) {
-      fromDate.setHours(0, 0, 0, 0);
-    }
-
-    if (toDate) {
-      toDate.setHours(23, 59, 59, 999);
-    }
-
+    if (fromDate) fromDate.setHours(0, 0, 0, 0);
+    if (toDate) toDate.setHours(23, 59, 59, 999);
     return { from: fromDate, to: toDate };
   }, [dateRange]);
+
+  const fromDateStr = normalizedDateRange?.from
+    ? normalizedDateRange.from.toISOString().slice(0, 19).replace("T", " ")
+    : null;
+  const toDateStr = normalizedDateRange?.to
+    ? normalizedDateRange.to.toISOString().slice(0, 19).replace("T", " ")
+    : null;
+
+  const fetchOrders = async () => {
+    setOrderLoading(true);
+    setOrderError(null);
+    try {
+      const result = await getOrdersPaginated({
+        order_status: statusFilter !== ALL_OPTION ? statusFilter : undefined,
+        waiter: waiterFilter !== ALL_OPTION ? waiterFilter : undefined,
+        from_date: fromDateStr,
+        to_date: toDateStr,
+        limit_start: page * PAGE_SIZE,
+        limit_page_length: PAGE_SIZE,
+      });
+      setOrders(result.data);
+      setTotal(result.total);
+      if (page === 0) {
+        setStatusOptions(result.status_options || []);
+        setWaiterOptions(result.waiter_options || []);
+      }
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      setOrderError(err?.message || "Failed to load orders");
+      setOrders([]);
+      setTotal(0);
+    } finally {
+      setOrderLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [page, statusFilter, waiterFilter, fromDateStr, toDateStr]);
 
   const dateRangeLabel = useMemo(() => {
     if (dateRange?.from && dateRange?.to) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
       const isSameDay = (dateA, dateB) =>
         dateA?.getFullYear() === dateB?.getFullYear() &&
         dateA?.getMonth() === dateB?.getMonth() &&
         dateA?.getDate() === dateB?.getDate();
-
       if (isSameDay(dateRange.from, today) && isSameDay(dateRange.to, today)) {
         return "Today";
       }
-
       if (isSameDay(dateRange.from, dateRange.to)) {
         return dateRange.from.toLocaleDateString();
       }
-
       return `${dateRange.from.toLocaleDateString()} — ${dateRange.to.toLocaleDateString()}`;
     }
-
-    if (dateRange?.from) {
-      return `${dateRange.from.toLocaleDateString()} — …`;
-    }
-
+    if (dateRange?.from) return `${dateRange.from.toLocaleDateString()} — …`;
     return "All dates";
   }, [dateRange]);
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      if (statusFilter !== ALL_OPTION && order.order_status !== statusFilter) {
-        return false;
-      }
-
-      const orderWaiterValue = order.waiter || order.waiter_name || "";
-      if (waiterFilter !== ALL_OPTION && orderWaiterValue !== waiterFilter) {
-        return false;
-      }
-
-      if (normalizedDateRange) {
-        const creationDate = order.creation ? new Date(order.creation) : null;
-        const isValidCreationDate =
-          creationDate instanceof Date &&
-          !Number.isNaN(creationDate?.getTime());
-
-        if (!isValidCreationDate) {
-          return false;
-        }
-
-        if (
-          normalizedDateRange.from &&
-          creationDate < normalizedDateRange.from
-        ) {
-          return false;
-        }
-
-        if (normalizedDateRange.to && creationDate > normalizedDateRange.to) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [orders, statusFilter, waiterFilter, normalizedDateRange]);
 
   useEffect(() => {
     if (statusFilter !== ALL_OPTION && !statusOptions.includes(statusFilter)) {
@@ -173,19 +132,19 @@ const Orders = () => {
 
   useEffect(() => {
     if (isCalendarOpen) {
-      setDraftDateRange({
-        from: dateRange?.from,
-        to: dateRange?.to,
-      });
+      setDraftDateRange({ from: dateRange?.from, to: dateRange?.to });
     }
   }, [isCalendarOpen, dateRange]);
 
-  if (orderLoading) {
+  const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+  const hasNext = page < totalPages - 1;
+  const hasPrev = page > 0;
+
+  if (orderLoading && orders.length === 0) {
     return <Loader />;
   }
 
-  if (orderError) {
-    console.error("Error fetching orders:", orderError);
+  if (orderError && orders.length === 0) {
     return <Error />;
   }
 
@@ -199,7 +158,10 @@ const Orders = () => {
               <p className="text-sm text-muted-foreground">Filter by waiter</p>
               <Select
                 value={waiterFilter}
-                onValueChange={(value) => setWaiterFilter(value)}
+                onValueChange={(value) => {
+                  setWaiterFilter(value);
+                  setPage(0);
+                }}
               >
                 <SelectTrigger className="w-40 bg-secondary-background">
                   <SelectValue placeholder="All waiters" />
@@ -211,9 +173,9 @@ const Orders = () => {
                       No waiters found
                     </SelectItem>
                   ) : (
-                    waiterOptions.map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
+                    waiterOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
                       </SelectItem>
                     ))
                   )}
@@ -224,7 +186,10 @@ const Orders = () => {
               <p className="text-sm text-muted-foreground">Filter by status</p>
               <Select
                 value={statusFilter}
-                onValueChange={(value) => setStatusFilter(value)}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setPage(0);
+                }}
               >
                 <SelectTrigger className="w-40 bg-secondary-background">
                   <SelectValue placeholder="All statuses" />
@@ -260,11 +225,9 @@ const Orders = () => {
                     selected={draftDateRange}
                     className="[--cell-size:3rem] text-base"
                     onSelect={(range) => {
-                      const nextRange = range ?? {
-                        from: undefined,
-                        to: undefined,
-                      };
-                      setDraftDateRange(nextRange);
+                      setDraftDateRange(
+                        range ?? { from: undefined, to: undefined }
+                      );
                     }}
                     initialFocus
                   />
@@ -298,6 +261,7 @@ const Orders = () => {
                             to: draftDateRange?.to,
                           });
                           setIsCalendarOpen(false);
+                          setPage(0);
                         }}
                         disabled={
                           !(
@@ -315,8 +279,15 @@ const Orders = () => {
             </div>
           </div>
         </div>
+
+        {orderLoading && orders.length > 0 && (
+          <div className="mb-4 text-sm text-muted-foreground">
+            Loading...
+          </div>
+        )}
+
         <div className="grid grid-cols-5 gap-4">
-          {filteredOrders.length === 0 ? (
+          {orders.length === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 py-10 text-center text-muted-foreground">
               <p className="text-lg font-semibold">No orders found</p>
               <p className="text-sm">
@@ -324,7 +295,7 @@ const Orders = () => {
               </p>
             </div>
           ) : (
-            filteredOrders.map((order) => (
+            orders.map((order) => (
               <Card
                 key={order.name}
                 className="cursor-pointer transition hover:shadow-lg"
@@ -360,6 +331,32 @@ const Orders = () => {
             ))
           )}
         </div>
+
+        {total > PAGE_SIZE && (
+          <div className="mt-6 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={!hasPrev || orderLoading}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={!hasNext || orderLoading}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Container>
       <OrderDetailsDialog
         open={isDialogOpen}
@@ -372,9 +369,7 @@ const Orders = () => {
           setIsDialogOpen(false);
           setSelectedOrderId(null);
         }}
-        onDeleted={async () => {
-          await fetchOrders();
-        }}
+        onDeleted={fetchOrders}
       />
     </>
   );
