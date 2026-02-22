@@ -1,32 +1,18 @@
-import { useEffect, useState } from "react";
-import { getNumberOfItems } from "@/lib/utils";
+import { useMemo } from "react";
 
-export default function useCategoryCounts(categories) {
-	const [counts, setCounts] = useState({});
-
-	useEffect(() => {
-		if (!categories.length) return;
-
-		let cancelled = false;
-
-		async function load() {
-			const entries = await Promise.all(
-				categories.map(async (cat) => {
-					const count = await getNumberOfItems(cat.name);
-					return [cat.name, count];
-				})
-			);
-
-			if (!cancelled) {
-				setCounts(Object.fromEntries(entries));
-			}
+/**
+ * Compute category item counts from menuItems so the count always matches
+ * the displayed items (same filters: custom_do_not_show_in_pos, disabled, etc.)
+ */
+export default function useCategoryCounts(categories, menuItems = []) {
+	return useMemo(() => {
+		if (!categories?.length || !menuItems?.length) return {};
+		const counts = {};
+		for (const cat of categories) {
+			counts[cat.name] = menuItems.filter(
+				(item) => (item.item_group || "") === cat.name
+			).length;
 		}
-
-		load();
-		return () => {
-			cancelled = true;
-		};
-	}, [categories]);
-
-	return counts;
+		return counts;
+	}, [categories, menuItems]);
 }

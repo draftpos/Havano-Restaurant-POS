@@ -375,21 +375,8 @@ const Cart = () => {
         <CardHeader>
           <CardTitle className="flex justify-between items-center">
             <Clock />
-            {activeOrderId ? (
+            {cart.length > 0 ? (
               <h1 className="text-2xl font-bold text-primary">
-                {activeOrderId}
-              </h1>
-            ) : (
-              <h1 className="text-2xl font-bold text-primary">New Order</h1>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <hr className="border border-gray-600" />
-        <CardContent className="flex-1 overflow-y-auto">
-          <div className="flex justify-between items-center my-2">
-            <p className="text-lg font-bold">Order Details</p>
-            {cart.length > 0 && (
-              <p className="text-lg font-bold text-primary">
                 Total: {formatCurrency(
                   cart.reduce((total, item) => {
                     const price = item.price ?? item.standard_rate ?? 0;
@@ -397,9 +384,16 @@ const Cart = () => {
                     return total + (price * quantity);
                   }, 0)
                 )}
-              </p>
+              </h1>
+            ) : activeOrderId ? (
+              <h1 className="text-2xl font-bold text-primary">{activeOrderId}</h1>
+            ) : (
+              <h1 className="text-2xl font-bold text-primary">New Order</h1>
             )}
-          </div>
+          </CardTitle>
+        </CardHeader>
+        <hr className="border border-gray-600" />
+        <CardContent className="flex-1 overflow-y-auto py-1 px-2">
          {
            cart.length ? (
              <div className="space-y-1">
@@ -410,13 +404,13 @@ const Cart = () => {
                    <div
                      key={item.name}
                      className={cn(
-                       "flex justify-between gap-2 bg-secondary-background p-2 rounded min-w-0",
+                       "flex justify-between gap-2 bg-secondary-background px-2 py-2 rounded min-w-0",
                        isActive && "border-2 border-primary bg-primary/10"
                      )}
                    >
                      <div className="flex gap-2 font-bold min-w-0 flex-1 text-sm">
                        <p className="shrink-0">x{item.quantity}</p>
-                       <p className="min-w-0 flex-1 break-words whitespace-normal text-xs">
+                       <p className="min-w-0 flex-1 break-words whitespace-normal text-sm leading-snug">
                          {item.item_name || item.name}
                        </p>
                        <i className="shrink-0">
@@ -447,7 +441,7 @@ const Cart = () => {
          }
         </CardContent>
         <hr className="border border-gray-600" />
-        <CardFooter>
+        <CardFooter className="py-2 px-3">
           <Button
             onClick={() => handleSubmitOrder(cart)}
             size="lg"

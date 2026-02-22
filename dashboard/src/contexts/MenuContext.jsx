@@ -58,7 +58,7 @@ export function MenuProvider({ children }) {
 
   const categories = useSortedCategories(menuCategories);
   const categoryColors = useCategoryColors(categories);
-  const categoryCounts = useCategoryCounts(categories);
+  const categoryCounts = useCategoryCounts(categories, menuItems);
 
   const visibleCategories = useMemo(
     () =>
