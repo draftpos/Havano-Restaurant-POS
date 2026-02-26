@@ -1152,7 +1152,26 @@ def process_table_payment(table, order_ids, total, amount=None, payment_method=N
         table_doc.save(ignore_permissions=True)
         
         frappe.db.commit()
-        
+        # ---- Update Sales Invoice custom_kot (trial & error safe) ----
+        try:
+            if orders_to_update:
+                first_order_id = orders_to_update[0].name
+
+                frappe.db.set_value(
+                    "Sales Invoice",
+                    invoice_name,
+                    "custom_kot",
+                    first_order_id
+                )
+
+                frappe.db.commit()
+
+        except Exception as e:
+            frappe.log_error(
+                message=frappe.get_traceback(),
+                title="Failed to update Sales Invoice custom_kot"
+            )
+                
         return {
             "success": True,
             "message": "Table payment processed successfully",
@@ -3102,6 +3121,7 @@ def _build_invoice_json(invoice_doc, cost_center_doc=None):
         "TIN": company_fields.get("tax_id") or "",
         "VATNo": "",
         "InvoiceNo": invoice_doc.name,
+        "KOT": getattr(invoice_doc, "custom_kot", ""),
         "InvoiceDate": invoice_doc.creation.strftime("%Y-%m-%d"),
         "CashierName": invoice_doc.owner,
         "CustomerName": invoice_doc.customer_name,

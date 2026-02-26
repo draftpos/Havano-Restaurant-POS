@@ -277,7 +277,7 @@ fixtures = [
                 "Quotation-custom_ordered",
                 "Sales Invoice Item-custom_is_kitchen_item",
                 "Sales Invoice-custom_shift_number",
-                "Sales Invoice-custom_change",
+                "Sales Invoice-custom_kot",
                 "Item-custom_is_order_item_1",
                 "Item-custom_is_order_item_2",
                 "Item-custom_is_order_item_3",
