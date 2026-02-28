@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import ShiftDialog from "@/components/ui/ShiftDialog";
 
 import Container from "@/components/Shared/Container";
 import getNavLinks from "@/navLinks";
@@ -9,6 +10,7 @@ import { isHotelAppInstalled } from "@/lib/utils";
 const Footer = () => {
   const [navLinks, setNavLinks] = useState([]);
   const { startNewTakeAwayOrder } = useCartStore();
+  const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,54 +48,68 @@ const Footer = () => {
     <div>
       <hr className="border border-primary" />
       <Container>
-        <div className="py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {/* App Icon - Link to main Frappe app */}
-              <a
-                href="/app"
-                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
-                title="Go to App"
+        <div className="py-4 flex items-center justify-between w-full">
+          {/* Left icons */}
+          <div className="flex items-center gap-2">
+            <a
+              href="/app"
+              className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Go to App"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 text-gray-700 hover:text-primary"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-gray-700 hover:text-primary"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                  />
-                </svg>
-              </a>
-              {/* Hotel Icon - Link to Hotel Dashboard */}
-              <a
-                href="#"
-                onClick={handleHotelClick}
-                className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
-                title="Go to Hotel Dashboard"
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                />
+              </svg>
+            </a>
+            <a
+              href="#"
+              onClick={handleHotelClick}
+              className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Go to Hotel Dashboard"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 text-gray-700 hover:text-primary"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-gray-700 hover:text-primary"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                  />
-                </svg>
-              </a>
-            </div>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
+              </svg>
+            </a>
+          </div>
+
+          {/* Navigation links evenly spaced */}
+          <div className="flex flex-1 justify-evenly">
             {navLinks.map((link) => {
+              if (link.name === "CLOSE SHIFT") {
+                return (
+                  <button
+                    key={link.name}
+                    onClick={() => setShiftDialogOpen(true)}
+                    className="text-primary/70 hover:text-primary py-1 transition-colors font-semibold"
+                    style={{ background: "none", border: "none" }}
+                  >
+                    {link.name}
+                  </button>
+                );
+              }
+
               if (!link.active) {
                 return (
                   <span
@@ -107,8 +123,8 @@ const Footer = () => {
 
               return (
                 <NavLink
-                  to={link.path}
                   key={link.name}
+                  to={link.path}
                   end
                   onClick={(e) => handleNavClick(e, link)}
                   className={({ isActive }) =>
@@ -124,6 +140,13 @@ const Footer = () => {
           </div>
         </div>
       </Container>
+
+      {/* Shift Dialog */}
+      <ShiftDialog
+        open={shiftDialogOpen}
+        type="close"
+        onOpenChange={setShiftDialogOpen}
+      />
     </div>
   );
 };

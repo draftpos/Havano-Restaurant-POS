@@ -273,12 +273,12 @@ export default function PaymentDialog({
             await triggerInvoiceDownload(res.sales_invoice, selectedReceipt);
           }
           if (res.success && !res.dine_in_only) {
-  toast.success("Invoice created", { description: `Invoice ${res.sales_invoice} created successfully.` });
-} else if (res.success && res.dine_in_only) {
-  console.log("Dine In order created, no invoice toast.");
-} else {
-  toast.error("Invoice creation failed", { description: res.details || res.message });
-}
+            toast.success("Invoice created", { description: `Invoice ${res.sales_invoice} created successfully.` });
+          } else if (res.success && res.dine_in_only) {
+            console.log("Dine In order created, no invoice toast.");
+          } else {
+            toast.error("Invoice creation failed", { description: res.details || res.message });
+          }
         }
       } catch (err) {
         console.error("Payment processing error:", err);
