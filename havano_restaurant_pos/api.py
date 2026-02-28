@@ -5501,3 +5501,27 @@ def get_uoms_for_item(item_name: str):
 
     print("UOMs for", item_name, ":", uoms)
     return uoms
+
+
+import frappe
+@frappe.whitelist()
+def get_item_variants(item_code):
+    if not item_code:
+        return []
+
+    # fetch the main item
+    item = frappe.get_doc("Item", item_code)
+
+    # if it's a template, get all items that are variants of this template
+    if item.has_variants:
+        variants = frappe.get_all(
+            "Item",
+            filters={"variant_of": item.name, "disabled": 0},
+            fields=["name", "item_name", "standard_rate", "stock_uom"]
+        )
+        print(f"Item {item_code} has variants: {variants}")
+        return variants
+
+    # if it’s not a template, just return empty array
+    print(f"Item {item_code} is not a template or has no variants")
+    return []

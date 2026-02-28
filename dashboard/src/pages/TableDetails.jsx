@@ -491,9 +491,7 @@ const TableDetails = () => {
                           label: cust.customer_name || cust.name,
                         }))}
                         value={watch("customerName")}
-                        onValueChange={(value) =>
-                          setValue("customerName", value, { shouldValidate: true })
-                        }
+                      
                         placeholder={loadingCustomers ? "Loading..." : "Select customer"}
                         searchPlaceholder="Search customers..."
                         disabled={loadingCustomers}

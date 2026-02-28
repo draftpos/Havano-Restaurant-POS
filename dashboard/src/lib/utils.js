@@ -828,6 +828,21 @@ export async function getItemUoms(itemName) {
   }, `Failed to fetch UOMs for item ${itemName}`);
 }
 
+export async function getItemVariants(itemName) {
+  return attemptWithRetries(async () => {
+    const { message } = await call.get(
+      "havano_restaurant_pos.api.get_item_variants",
+      { item_code: itemName }
+    );
+
+    if (!message) {
+      console.warn("No variants returned for item:", itemName);
+      return [];
+    }
+
+    return message; // array of actual variant items
+  }, "Failed to fetch item variants");
+}
 export async function openShift() {
   return attemptWithRetries(async () => {
     const { message } = await call.post("havano_restaurant_pos.api.open_shift", {});

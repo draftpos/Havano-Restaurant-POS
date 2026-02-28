@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { checkStock, getItemUoms, negativeStock } from "@/lib/utils";
+import { checkStock, getItemUoms, negativeStock, getItemVariants } from "@/lib/utils";
 import { toast } from "sonner";
 
 import { useMenuContext } from "@/contexts/MenuContext";
 import { Card, CardHeader, CardTitle } from "../ui/card";
 import UomSelectModal from "../ui/uom";
+import VariantSelectModal from "../ui/VariantSelectModal";
 
 const MenuItemCard = ({ item, index }) => {
   const [showUomModal, setShowUomModal] = useState(false);
@@ -18,77 +19,63 @@ const MenuItemCard = ({ item, index }) => {
   const addToCart = useCartStore((state) => state.addToCart);
   const cartItems = useCartStore((state) => state.cart || []);
 
-  const itemsToUse = useMemo(() => {
-    if (!cartItems || cartItems.length === 0) return [];
-    return cartItems.map((ci) => ({
-      name: ci.name || ci.item_code || ci.item_name,
-      item_code: ci.item_code || ci.name || ci.item_name,
-      item_name: ci.item_name || ci.name,
-      quantity: ci.quantity || ci.qty || 1,
-      qty: ci.qty || ci.quantity || 1,
-      price: ci.price || ci.rate || ci.standard_rate || 0,
-      rate: ci.rate || ci.price || ci.standard_rate || 0,
-      uom: ci.uom || null,
-    }));
-  }, [cartItems]);
+  const [showVariantModal, setShowVariantModal] = useState(false);
+  const [variantsToShow, setVariantsToShow] = useState([]);
 
   const isActive = currentIndex === index && target === "menu";
 
-const handleAddToCart = async () => {
-  // Prevent double-add: only one add-in-progress per item at a time
-  if (addingItemName === item.name) return;
-  setAddingItemName(item.name);
+  const handleAddToCart = async () => {
+    if (addingItemName === item.name) return;
+    setAddingItemName(item.name);
 
-  try {
-    // can_use_negative_stock is loaded once on menu open (MenuContext). Only check stock when negative not allowed.
-    if (allowNegativeStock === false) {
-      const stockData = await checkStock(item.name);
-      if (stockData?.stock <= 0) {
-        toast.error("Error", { description: `No stock available for ${item.item_name}` });
+    try {
+      // Stock check
+      if (allowNegativeStock === false) {
+        const stockData = await checkStock(item.name);
+        if (stockData?.stock <= 0) {
+          toast.error("Error", { description: `No stock available for ${item.item_name}` });
+          return;
+        }
+      } else if (allowNegativeStock === null) {
+        const [stockData, allowNegative] = await Promise.all([checkStock(item.name), negativeStock()]);
+        if (!allowNegative && stockData?.stock <= 0) {
+          toast.error("Error", { description: `No stock available for ${item.item_name}` });
+          return;
+        }
+      }
+
+      // Already in cart
+      const currentCart = useCartStore.getState().cart || [];
+      const existingCartItem = currentCart.find((ci) => ci.name === item.name);
+      if (existingCartItem) {
+        addToCart({ ...existingCartItem, quantity: existingCartItem.quantity + 1 });
         return;
       }
-    } else if (allowNegativeStock === null) {
-      // Not yet loaded: one-time fallback so we don't add when stock is 0
-      const [stockData, allowNegative] = await Promise.all([
-        checkStock(item.name),
-        negativeStock(),
-      ]);
-      if (!allowNegative && stockData?.stock <= 0) {
-        toast.error("Error", { description: `No stock available for ${item.item_name}` });
+
+      // Fetch UOMs
+      const fetchedUoms = await getItemUoms(item.name);
+      if (!fetchedUoms || fetchedUoms.length === 0) {
+        toast.error(`No UOMs found for ${item.item_name}`);
         return;
       }
-    }
-    // allowNegativeStock === true: skip stock check entirely
 
-    // Use fresh cart from store in case another add completed while we awaited
-    const currentCart = useCartStore.getState().cart || [];
-    const existingCartItem = currentCart.find((ci) => ci.name === item.name);
+      // Fetch Variants
+      const fetchedVariantsRaw = await getItemVariants(item.name);
 
-    if (existingCartItem) {
-      addToCart({
-        ...existingCartItem,
-        quantity: existingCartItem.quantity + 1,
-      });
+      const fetchedVariants = Array.isArray(fetchedVariantsRaw)
+        ? fetchedVariantsRaw
+        : fetchedVariantsRaw
+          ? [fetchedVariantsRaw]
+          : [];
+
+      // If variants exist, show VariantSelectModal
+      if (fetchedVariants.length > 0) {
+      setPendingItem(item);
+      setVariantsToShow(fetchedVariants);
+      setShowVariantModal(true);
       return;
     }
-
-    // Not in cart → fetch UOMs (single call)
-    const fetchedUoms = await getItemUoms(item.name);
-
-    if (!fetchedUoms || fetchedUoms.length === 0) {
-      toast.error(`No UOMs found for ${item.item_name}`);
-      return;
-    }
-
-    // Re-check cart after fetch; user might have added same item via another click
-    const cartAfterFetch = useCartStore.getState().cart || [];
-    const existingNow = cartAfterFetch.find((ci) => ci.name === item.name);
-    if (existingNow) {
-      addToCart({ ...existingNow, quantity: existingNow.quantity + 1 });
-      return;
-    }
-
-    if (fetchedUoms.length === 1) {
+      // No variants → add directly
       addToCart({
         name: item.name,
         item_name: item.item_name,
@@ -99,38 +86,32 @@ const handleAddToCart = async () => {
         standard_rate: item.standard_rate ?? item.price ?? 0,
         remark: "No stock override",
       });
-      return;
+
+    } catch (err) {
+      toast.error("Could not add item", { description: err?.message || "Please try again." });
+    } finally {
+      setAddingItemName(null);
     }
+  };
 
-    setPendingItem(item);
-    setDynamicUoms(fetchedUoms);
-    setShowUomModal(true);
-  } catch (err) {
-    toast.error("Could not add item", {
-      description: err?.message || "Please try again.",
-    });
-  } finally {
-    setAddingItemName(null);
-  }
-};
-
-
-  const handleUomSelect = (uom) => {
+  // Handle selection from modal (UOM or Variant)
+  const handleUomSelect = (selected) => {
     if (!pendingItem) return;
 
     addToCart({
-      name: pendingItem.name,
-      item_name: pendingItem.item_name,
+      name: selected.name || pendingItem.name,
+      item_name: selected.item_name || pendingItem.item_name,
       custom_menu_category: pendingItem.custom_menu_category,
       quantity: 1,
-      uom,
-      price: pendingItem.standard_rate ?? pendingItem.price ?? 0,
-      standard_rate: pendingItem.standard_rate ?? pendingItem.price ?? 0,
+      uom: selected.stock_uom || selected, // variant has stock_uom, UOM is string
+      price: selected.standard_rate ?? selected.price ?? pendingItem.standard_rate ?? 0,
+      standard_rate: selected.standard_rate ?? selected.price ?? pendingItem.standard_rate ?? 0,
       remark: "No stock override",
     });
 
     setShowUomModal(false);
     setPendingItem(null);
+    setDynamicUoms([]);
   };
 
   const handleSelectItem = () => {
@@ -138,18 +119,16 @@ const handleAddToCart = async () => {
     setTarget("menu");
   };
 
-  const imageUrl = item.image
-    ? (item.image.startsWith("/") ? item.image : `/${item.image}`)
-    : null;
+  const imageUrl = item.image ? (item.image.startsWith("/") ? item.image : `/${item.image}`) : null;
 
   return (
     <>
       <Card
         data-index={index}
         onClick={() => {
-          if (showUomModal) return; // prevent double actions
+          if (showUomModal) return;
           handleSelectItem();
-          handleAddToCart(); // ✅ async handled inside
+          handleAddToCart();
         }}
         className={cn(
           "menu-item cursor-pointer rounded-lg border shadow-sm transition transform hover:shadow-md hover:scale-[1.02] active:scale-[0.98] active:bg-gray-50 py-2 gap-2",
@@ -159,11 +138,7 @@ const handleAddToCart = async () => {
       >
         <CardHeader className="flex flex-col items-center gap-2 px-3 py-1 w-full">
           {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={item.item_name}
-              className="w-full aspect-square object-cover rounded-md flex-shrink-0"
-            />
+            <img src={imageUrl} alt={item.item_name} className="w-full aspect-square object-cover rounded-md flex-shrink-0" />
           )}
           <CardTitle className="break-words text-center whitespace-normal text-sm leading-tight w-full">
             {item.item_name}
@@ -173,14 +148,41 @@ const handleAddToCart = async () => {
 
       {showUomModal && (
         <UomSelectModal
-          uoms={dynamicUoms}
+          uoms={dynamicUoms} // either UOMs or Variants
           onSelect={handleUomSelect}
           onClose={() => {
             setShowUomModal(false);
             setPendingItem(null);
+            setDynamicUoms([]);
           }}
         />
       )}
+
+      {showVariantModal && (
+  <VariantSelectModal
+    variants={variantsToShow}
+    onSelect={(variant) => {
+      addToCart({
+        name: variant.name || pendingItem.name,
+        item_name: variant.item_name || pendingItem.item_name,
+        custom_menu_category: pendingItem.custom_menu_category,
+        quantity: 1,
+        uom: variant.stock_uom || variant, // if variant has stock_uom
+        price: variant.standard_rate ?? variant.price ?? pendingItem.standard_rate ?? 0,
+        standard_rate: variant.standard_rate ?? variant.price ?? pendingItem.standard_rate ?? 0,
+        remark: "No stock override",
+      });
+      setShowVariantModal(false);
+      setPendingItem(null);
+      setVariantsToShow([]);
+    }}
+    onClose={() => {
+      setShowVariantModal(false);
+      setPendingItem(null);
+      setVariantsToShow([]);
+    }}
+  />
+)}
     </>
   );
 };
