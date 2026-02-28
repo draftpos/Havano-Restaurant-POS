@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createInvoiceAndPaymentQueue, makePaymentForTransaction, processTablePayment, get_invoice_json } from "@/lib/utils";
 import { db, call } from "@/lib/frappeClient";
 import { useCartStore } from "@/stores/useCartStore";
+import { toast } from "sonner";
 
 export default function PaymentDialog({
   open,
@@ -267,9 +268,17 @@ export default function PaymentDialog({
             null,
             change
           );
+          
           if (res?.sales_invoice) {
             await triggerInvoiceDownload(res.sales_invoice, selectedReceipt);
           }
+          if (res.success && !res.dine_in_only) {
+  toast.success("Invoice created", { description: `Invoice ${res.sales_invoice} created successfully.` });
+} else if (res.success && res.dine_in_only) {
+  console.log("Dine In order created, no invoice toast.");
+} else {
+  toast.error("Invoice creation failed", { description: res.details || res.message });
+}
         }
       } catch (err) {
         console.error("Payment processing error:", err);
