@@ -58,6 +58,12 @@ const MenuItemCard = ({ item, index }) => {
         toast.error(`No UOMs found for ${item.item_name}`);
         return;
       }
+      if (fetchedUoms.length > 1) {
+        setPendingItem(item);
+        setDynamicUoms(fetchedUoms);
+        setShowUomModal(true);
+        return;
+      }
 
       // Fetch Variants
       const fetchedVariantsRaw = await getItemVariants(item.name);
@@ -158,7 +164,7 @@ const MenuItemCard = ({ item, index }) => {
         />
       )}
 
-      {showVariantModal && (
+{showVariantModal && (
   <VariantSelectModal
     variants={variantsToShow}
     onSelect={(variant) => {
@@ -167,9 +173,9 @@ const MenuItemCard = ({ item, index }) => {
         item_name: variant.item_name || pendingItem.item_name,
         custom_menu_category: pendingItem.custom_menu_category,
         quantity: 1,
-        uom: variant.stock_uom || variant, // if variant has stock_uom
-        price: variant.standard_rate ?? variant.price ?? pendingItem.standard_rate ?? 0,
-        standard_rate: variant.standard_rate ?? variant.price ?? pendingItem.standard_rate ?? 0,
+        uom: variant.stock_uom || variant, // variant UOM if present
+        price: pendingItem.standard_rate ?? pendingItem.price ?? 0, // parent item price
+        standard_rate: pendingItem.standard_rate ?? pendingItem.price ?? 0, // parent item price
         remark: "No stock override",
       });
       setShowVariantModal(false);
@@ -181,6 +187,8 @@ const MenuItemCard = ({ item, index }) => {
       setPendingItem(null);
       setVariantsToShow([]);
     }}
+
+    
   />
 )}
     </>

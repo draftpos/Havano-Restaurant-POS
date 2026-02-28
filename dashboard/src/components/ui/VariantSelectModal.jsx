@@ -40,7 +40,7 @@ export default function VariantSelectModal({ variants = [], onSelect, onClose })
                   onSelect?.(variant);
                 }}
               >
-                {variant.item_name} - ${variant.standard_rate}
+                {variant.item_name} 
               </button>
             ))}
           </div>
