@@ -18,6 +18,7 @@ const data = await db.getDocList("Item", {
   filters: [
     ["custom_do_not_show_in_pos", "=", 0],
     ["disabled", "=", 0],
+    ["variant_of", "=", null] 
   ],
   limit: 0,
   });
@@ -26,11 +27,13 @@ const data = await db.getDocList("Item", {
       method: "GET",
       credentials: "include",
     });
+
     const pricedItems = (await res.json()).message;
 
-    // console.log("Menu Items with User Prices:", pricedItems);
+    // keep only parents
+    const parentItems = pricedItems.filter(item => !item.variant_of);
 
-      set({ menuItems: pricedItems, loading: false });
+set({ menuItems: parentItems, loading: false });
     } catch (err) {
       console.error("Fetch error:", err);
       set({ error: err.message, loading: false });

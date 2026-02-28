@@ -4550,14 +4550,14 @@ def get_menu_items_with_user_prices():
 
     # fetch all menu items visible in POS
     items = frappe.get_all(
-        "Item",
-        filters={
-            "custom_do_not_show_in_pos": 0,
-            "disabled": 0
-        },
-        fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
-    )
-
+    "Item",
+    filters={
+        "custom_do_not_show_in_pos": 0,
+        "disabled": 0,
+        "variant_of": ""  # only items that are NOT variants
+    },
+    fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
+)
     # exclude items whose item_group has do_not_show_in_pos
     if hidden_groups:
         items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
