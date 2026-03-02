@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { get_invoice_json } from "@/lib/utils";
+import { useCartStore } from "@/stores/useCartStore";
+import { toast } from "sonner";
 
-const CreditNoteDialog = ({ open, onOpenChange, onSelectInvoice }) => {
+const CreditNoteDialog = ({ open, onOpenChange }) => {
   const [search, setSearch] = useState("");
   const [invoices, setInvoices] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const modalRef = useRef();
+  const addToCart = useCartStore((state) => state.addToCart);
 
   // Close modal when clicking outside
   useEffect(() => {
@@ -18,7 +21,7 @@ const CreditNoteDialog = ({ open, onOpenChange, onSelectInvoice }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, onOpenChange]);
 
-  // Fetch latest 3 invoices from your whitelisted method
+  // Fetch latest 3 invoices
   useEffect(() => {
     if (!open) return;
     fetch("/api/method/havano_restaurant_pos.api.get_latest_invoices")
@@ -52,14 +55,36 @@ const CreditNoteDialog = ({ open, onOpenChange, onSelectInvoice }) => {
   if (!open) return null;
 
   const handleSelect = async (invoiceName) => {
+    console.log("Selected invoice:", invoiceName);
     try {
       const json = await get_invoice_json(invoiceName);
-      typeof onSelectInvoice === "function" && onSelectInvoice(json);
+      const items = Array.isArray(json?.items) ? json.items : [];
+
+      if (!items.length) {
+        toast.error("No items found in this invoice");
+        return;
+      }
+
+      // Add each item to cart
+      items.forEach((item) => {
+        addToCart({
+          name: item.item_code || item.item_name,
+          item_name: item.item_name,
+          custom_menu_category: item.custom_menu_category || "General",
+          quantity: item.qty || 1,
+          uom: item.uom || "Unit",
+          price: item.rate || item.price || 0,
+          standard_rate: item.rate || item.price || 0,
+          remark: `From invoice ${invoiceName}`,
+        });
+      });
+
+      toast.success(`${items.length} item(s) added from invoice ${invoiceName}`);
       setSearch("");
       onOpenChange(false);
     } catch (err) {
       console.error(err);
-      frappe.msgprint(`Invoice ${invoiceName} does not exist.`);
+      toast.error(`Invoice ${invoiceName} could not be loaded`);
     }
   };
 
