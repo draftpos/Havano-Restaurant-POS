@@ -3,12 +3,15 @@ import { get_invoice_json } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { toast } from "sonner";
 
+
 const CreditNoteDialog = ({ open, onOpenChange }) => {
   const [search, setSearch] = useState("");
   const [invoices, setInvoices] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const modalRef = useRef();
+
   const addToCart = useCartStore((state) => state.addToCart);
+  const setCreditNoteMode = useCartStore((state) => state.setCreditNoteMode);
 
   // Close modal on outside click
   useEffect(() => {
@@ -69,17 +72,18 @@ const handleSelect = async (invoiceName) => {
       toast.error("No items found in this invoice");
       return;
     }
+    setCreditNoteMode(invoiceName);
 
     items.forEach((item) => {
       addToCart({
         name: item.productid || item.ProductName,
         item_name: item.ProductName,
         custom_menu_category: "General",
-        quantity: item.Qty || 1,
+        quantity: -Math.abs(item.Qty || 1), // 🔥 NEGATIVE
         uom: "Unit",
         price: item.Price ?? 0,
         standard_rate: item.Price ?? 0,
-        remark: `From invoice ${invoiceName}`,
+        remark: `Credit note for ${invoiceName}`,
       });
     });
 

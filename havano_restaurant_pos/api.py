@@ -5549,3 +5549,58 @@ def get_invoice_with_items(invoice_name):
         "posting_date": invoice.posting_date,
         "items": [dict(i) for i in invoice.items]
     }
+
+import frappe
+from frappe import _
+from frappe.utils import nowdate
+
+@frappe.whitelist()
+def create_credit_note(original_invoice, items):
+    """
+    Create a Credit Note (Return Sales Invoice)
+    """
+
+    if not original_invoice:
+        frappe.throw(_("Original invoice is required"))
+
+    # Get original invoice
+    original = frappe.get_doc("Sales Invoice", original_invoice)
+
+    if original.docstatus != 1:
+        frappe.throw(_("Original invoice must be submitted"))
+
+    # Create return invoice
+    credit = frappe.new_doc("Sales Invoice")
+
+    credit.customer = original.customer
+    credit.company = original.company
+    credit.posting_date = nowdate()
+    credit.is_return = 1
+    credit.return_against = original.name
+
+    # Optional but recommended
+    credit.set_posting_time = 1
+    credit.update_stock = original.update_stock
+
+    # Add items
+    for item in items:
+        credit.append("items", {
+            "item_code": item.get("item_code") or item.get("name"),
+            "item_name": item.get("item_name"),
+            "qty": -abs(float(item.get("quantity", 1))),  # force negative
+            "rate": float(item.get("price", 0)),
+            "uom": item.get("uom") or "Unit",
+            "income_account": original.items[0].income_account
+        })
+
+    # Calculate totals
+    credit.set_missing_values()
+    credit.calculate_taxes_and_totals()
+
+    # Save & Submit
+    credit.insert(ignore_permissions=True)
+    credit.submit()
+
+    return {
+        "sales_invoice": credit.name
+    }

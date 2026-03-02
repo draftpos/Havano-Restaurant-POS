@@ -14,12 +14,26 @@ export const useCartStore = create((set) => ({
   selectedCategory: null,
   selectedCartItem: null,
   isUpdateDialogOpen: false,
+  isCreditNote: false,
+  originalInvoice: null,
 
   setCustomer: (customer) => set({ customer }),
   setCustomerName: (customerName) => set({ customerName }),
   setTransactionType: (type) => set({ transactionType: type }),
   selectedReceipt: "default-receipt",
   setSelectedReceipt: (val) => set({ selectedReceipt: val }),
+
+  setCreditNoteMode: (invoiceName) =>
+  set({
+    isCreditNote: true,
+    originalInvoice: invoiceName,
+  }),
+
+  clearCreditNoteMode: () =>
+    set({
+      isCreditNote: false,
+      originalInvoice: null,
+    }),
 
   addToCart: (item) =>
     set((state) => {

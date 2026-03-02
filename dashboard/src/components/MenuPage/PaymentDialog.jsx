@@ -15,6 +15,8 @@ import { db, call } from "@/lib/frappeClient";
 import { useCartStore } from "@/stores/useCartStore";
 import { toast } from "sonner";
 
+
+
 export default function PaymentDialog({
   open,
   onOpenChange,
@@ -36,6 +38,11 @@ export default function PaymentDialog({
   const [openMultiCurrencyDialog, setOpenMultiCurrencyDialog] = useState(false);
   const [canPrintInvoice, setCanPrintInvoice] = useState(false);
   const { selectedReceipt } = useCartStore();
+  const { 
+  isCreditNote, 
+  originalInvoice, 
+  clearCreditNoteMode 
+} = useCartStore();
 
   // Fetch payment methods from HA POS Setting
   useEffect(() => {
@@ -165,6 +172,50 @@ export default function PaymentDialog({
   }, [paymentAmounts, total]);
 
   async function handlePay (){
+if (isCreditNote) {
+  console.log("Processing credit note for original invoice:", originalInvoice);
+  try {
+    const res = await call.post(
+      "havano_restaurant_pos.api.create_credit_note",
+      {
+        original_invoice: originalInvoice,
+        items: cartItems,
+      }
+    );
+
+    if (res?.message?.sales_invoice) {
+      toast.success("Credit Note created successfully");
+
+      // optional: download receipt
+      await triggerInvoiceDownload(
+        res.message.sales_invoice,
+        selectedReceipt
+      );
+
+      // close dialog
+      if (typeof onOpenChange === "function") {
+        onOpenChange(false);
+      }
+
+      // clear cart (VERY IMPORTANT)
+      useCartStore.getState().clearCart?.();
+
+      // reset credit mode
+      clearCreditNoteMode();
+
+    } else {
+      toast.error("Credit Note creation failed");
+    }
+
+  } catch (err) {
+    console.error(err);
+    toast.error("Credit Note creation failed");
+  }
+
+  return;
+}
+  console.log("Payment not credit note status:", paymentStatus);
+
     const change = paymentStatus.diff > 0 ? paymentStatus.diff : 0;
     let paidTotal = sumPayments();
     
@@ -472,13 +523,13 @@ export default function PaymentDialog({
                     >
                       Cancel
                     </Button>
-                    <Button
-                      onClick={handlePay}
-                      disabled={paymentStatus.hasDue}
-                      className="flex-1"
-                    >
-                      Make Payment
-                    </Button>
+                   <Button
+  onClick={handlePay}
+  disabled={!isCreditNote && paymentStatus.hasDue}
+  className="flex-1"
+>
+  {isCreditNote ? "Create Credit Note" : "Make Payment"}
+</Button>
                   </div>
                 </div>
               </div>
