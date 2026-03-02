@@ -5525,3 +5525,15 @@ def get_item_variants(item_code):
     # if it’s not a template, just return empty array
     print(f"Item {item_code} is not a template or has no variants")
     return []
+
+# havano_restaurant_pos/api/invoice_api.py
+@frappe.whitelist()
+def get_latest_invoices():
+    print("invoked--------------")
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        fields=["name as sales_invoice", "customer"],
+        order_by="creation desc",
+        # limit=int(limit)
+    )
+    return invoices

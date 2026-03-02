@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import ShiftDialog from "@/components/ui/ShiftDialog";
 import ReprintDialog from "@/components/ui/ReprintDialog";
+import CreditNoteDialog from "@/components/ui/CreditNoteDialog";
 
 import Container from "@/components/Shared/Container";
 import getNavLinks from "@/navLinks";
@@ -39,7 +40,7 @@ function NavDropdown({ label, items, onItemClick }) {
             <button
               key={item.name}
               onClick={() => {
-                onItemClick(item); // call Footer callback
+                onItemClick(item);
                 setOpen(false);
               }}
               className="block w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -59,6 +60,7 @@ const Footer = () => {
   const { startNewTakeAwayOrder } = useCartStore();
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
+  const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -92,13 +94,10 @@ const Footer = () => {
     }
   };
 
-  // Handle dropdown item clicks
   const handleDropdownItemClick = (item) => {
-    if (item.name === "Reprint Invoice") {
-      setReprintDialogOpen(true);
-    } else if (item.action) {
-      item.action();
-    }
+    if (item.name === "Reprint Invoice") setReprintDialogOpen(true);
+    else if (item.name === "Credit Note") setCreditNoteDialogOpen(true);
+    else if (item.action) item.action();
   };
 
   return (
@@ -209,20 +208,25 @@ const Footer = () => {
         </div>
       </Container>
 
-      {/* Shift Dialog */}
+      {/* Dialogs */}
       <ShiftDialog
         open={shiftDialogOpen}
         type="close"
         onOpenChange={setShiftDialogOpen}
       />
-
-      {/* Reprint Dialog */}
       <ReprintDialog
         open={reprintDialogOpen}
         onOpenChange={setReprintDialogOpen}
         onReprint={(invoiceNumber) => {
           console.log("Reprinting invoice:", invoiceNumber);
-          // call API to reprint
+        }}
+      />
+      <CreditNoteDialog
+        open={creditNoteDialogOpen}
+        onOpenChange={setCreditNoteDialogOpen}
+        onSelectInvoice={(invoiceJson) => {
+          console.log("Credit Note selected invoice:", invoiceJson);
+          // handle credit note logic here
         }}
       />
     </div>
