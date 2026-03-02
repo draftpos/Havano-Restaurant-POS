@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import ShiftDialog from "@/components/ui/ShiftDialog";
 
@@ -6,6 +6,50 @@ import Container from "@/components/Shared/Container";
 import getNavLinks from "@/navLinks";
 import { useCartStore } from "@/stores/useCartStore";
 import { isHotelAppInstalled } from "@/lib/utils";
+
+function NavDropdown({ label, items }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-primary/70 hover:text-primary py-1 font-semibold px-2 transition-colors"
+        style={{ background: "none", border: "none" }}
+      >
+        {label}
+      </button>
+
+      {open && (
+  <div className="absolute bottom-full mb-1 right-0 w-40 bg-white border shadow-lg rounded z-50">
+    {items.map((item) => (
+      <button
+        key={item.name}
+        onClick={() => {
+          item.action();
+          setOpen(false);
+        }}
+        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+      >
+        {item.name}
+      </button>
+    ))}
+  </div>
+)}
+    </div>
+  );
+}
 
 const Footer = () => {
   const [navLinks, setNavLinks] = useState([]);
@@ -96,47 +140,51 @@ const Footer = () => {
 
           {/* Navigation links evenly spaced */}
           <div className="flex flex-1 justify-evenly">
-            {navLinks.map((link) => {
-              if (link.name === "CLOSE SHIFT") {
-                return (
-                  <button
-                    key={link.name}
-                    onClick={() => setShiftDialogOpen(true)}
-                    className="text-primary/70 hover:text-primary py-1 transition-colors font-semibold"
-                    style={{ background: "none", border: "none" }}
-                  >
-                    {link.name}
-                  </button>
-                );
-              }
+           {navLinks.map((link) => {
+  if (link.name === "CLOSE SHIFT") {
+    return (
+      <button
+        key={link.name}
+        onClick={() => setShiftDialogOpen(true)}
+        className="text-primary/70 hover:text-primary py-1 transition-colors font-semibold"
+        style={{ background: "none", border: "none" }}
+      >
+        {link.name}
+      </button>
+    );
+  }
 
-              if (!link.active) {
-                return (
-                  <span
-                    key={link.name}
-                    className="text-gray-400 cursor-not-allowed py-1 opacity-50"
-                  >
-                    {link.name}
-                  </span>
-                );
-              }
+  if (link.name === "OPTIONS" && link.dropdown) {
+    return <NavDropdown key={link.name} label={link.name} items={link.dropdown} />;
+  }
 
-              return (
-                <NavLink
-                  key={link.name}
-                  to={link.path}
-                  end
-                  onClick={(e) => handleNavClick(e, link)}
-                  className={({ isActive }) =>
-                    isActive
-                      ? "text-primary font-semibold border-y-2 border-primary py-1 transition-colors"
-                      : "text-primary/70 hover:text-primary hover:border-b-2 hover:border-primary py-1 transition-colors"
-                  }
-                >
-                  {link.name}
-                </NavLink>
-              );
-            })}
+  if (!link.active) {
+    return (
+      <span
+        key={link.name}
+        className="text-gray-400 cursor-not-allowed py-1 opacity-50"
+      >
+        {link.name}
+      </span>
+    );
+  }
+
+  return (
+    <NavLink
+      key={link.name}
+      to={link.path}
+      end
+      onClick={(e) => handleNavClick(e, link)}
+      className={({ isActive }) =>
+        isActive
+          ? "text-primary font-semibold border-y-2 border-primary py-1 transition-colors"
+          : "text-primary/70 hover:text-primary hover:border-b-2 hover:border-primary py-1 transition-colors"
+      }
+    >
+      {link.name}
+    </NavLink>
+  );
+})}
           </div>
         </div>
       </Container>
