@@ -10,7 +10,7 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
   const modalRef = useRef();
   const addToCart = useCartStore((state) => state.addToCart);
 
-  // Close modal when clicking outside
+  // Close modal on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (modalRef.current && !modalRef.current.contains(e.target)) {
@@ -21,15 +21,16 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, onOpenChange]);
 
-  // Fetch latest 3 invoices
+  // Fetch latest invoices (lightweight)
   useEffect(() => {
     if (!open) return;
+
     fetch("/api/method/havano_restaurant_pos.api.get_latest_invoices")
       .then((res) => res.json())
       .then((data) => {
-        const arr = Array.isArray(data?.message) ? data.message : [];
-        setInvoices(arr);
-        setFiltered(arr);
+        const invs = Array.isArray(data?.message) ? data.message : [];
+        setInvoices(invs);
+        setFiltered(invs);
       })
       .catch((err) => {
         console.error("Error fetching latest invoices:", err);
@@ -38,55 +39,59 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
       });
   }, [open]);
 
-  // Filter invoices as user types
+  // Filter as user types
   useEffect(() => {
     if (!Array.isArray(invoices)) return;
-    if (search.trim() === "") {
+
+    if (!search.trim()) {
       setFiltered(invoices);
     } else {
-      setFiltered(
-        invoices.filter((inv) =>
-          inv.sales_invoice?.toLowerCase().includes(search.toLowerCase())
-        )
+      const filteredInvoices = invoices.filter((inv) =>
+        (inv.name || inv.sales_invoice || "").toLowerCase().includes(search.toLowerCase())
       );
+      setFiltered(filteredInvoices);
     }
   }, [search, invoices]);
 
   if (!open) return null;
 
-  const handleSelect = async (invoiceName) => {
-    console.log("Selected invoice:", invoiceName);
-    try {
-      const json = await get_invoice_json(invoiceName);
-      const items = Array.isArray(json?.items) ? json.items : [];
+const handleSelect = async (invoiceName) => {
+  if (!invoiceName) return;
 
-      if (!items.length) {
-        toast.error("No items found in this invoice");
-        return;
-      }
+  try {
+    const invoiceData = await get_invoice_json(invoiceName);
 
-      // Add each item to cart
-      items.forEach((item) => {
-        addToCart({
-          name: item.item_code || item.item_name,
-          item_name: item.item_name,
-          custom_menu_category: item.custom_menu_category || "General",
-          quantity: item.qty || 1,
-          uom: item.uom || "Unit",
-          price: item.rate || item.price || 0,
-          standard_rate: item.rate || item.price || 0,
-          remark: `From invoice ${invoiceName}`,
-        });
-      });
+    const items = Array.isArray(invoiceData?.itemlist)
+      ? invoiceData.itemlist
+      : [];
 
-      toast.success(`${items.length} item(s) added from invoice ${invoiceName}`);
-      setSearch("");
-      onOpenChange(false);
-    } catch (err) {
-      console.error(err);
-      toast.error(`Invoice ${invoiceName} could not be loaded`);
+    if (!items.length) {
+      toast.error("No items found in this invoice");
+      return;
     }
-  };
+
+    items.forEach((item) => {
+      addToCart({
+        name: item.productid || item.ProductName,
+        item_name: item.ProductName,
+        custom_menu_category: "General",
+        quantity: item.Qty || 1,
+        uom: "Unit",
+        price: item.Price ?? 0,
+        standard_rate: item.Price ?? 0,
+        remark: `From invoice ${invoiceName}`,
+      });
+    });
+
+    toast.success(`${items.length} item(s) added from invoice ${invoiceName}`);
+    setSearch("");
+    onOpenChange(false);
+
+  } catch (err) {
+    console.error(err);
+    toast.error(`Failed to load invoice ${invoiceName}`);
+  }
+};
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
@@ -102,15 +107,18 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
         />
 
         <ul className="max-h-40 overflow-y-auto mb-4 border border-gray-200 rounded">
-          {(Array.isArray(filtered) ? filtered : []).map((inv) => (
-            <li
-              key={inv.sales_invoice}
-              className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-              onClick={() => handleSelect(inv.sales_invoice)}
-            >
-              {inv.sales_invoice} - {inv.customer || "N/A"}
-            </li>
-          ))}
+          {(Array.isArray(filtered) ? filtered : []).map((inv) => {
+            const displayName = inv.sales_invoice || inv.name;
+            return (
+              <li
+                key={displayName}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => handleSelect(displayName)}
+              >
+                {displayName} - {inv.customer || "N/A"}
+              </li>
+            );
+          })}
           {(Array.isArray(filtered) ? filtered : []).length === 0 && (
             <li className="px-3 py-2 text-gray-400">No invoices found</li>
           )}

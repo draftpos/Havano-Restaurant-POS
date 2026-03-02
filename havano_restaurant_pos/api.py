@@ -5528,12 +5528,24 @@ def get_item_variants(item_code):
 
 # havano_restaurant_pos/api/invoice_api.py
 @frappe.whitelist()
-def get_latest_invoices():
-    print("invoked--------------")
-    invoices = frappe.get_all(
+# API to get latest invoices (lightweight)
+@frappe.whitelist()
+def get_latest_invoices(limit=3):
+    return frappe.get_all(
         "Sales Invoice",
-        fields=["name as sales_invoice", "customer"],
+        fields=["name", "customer"],
         order_by="creation desc",
-        # limit=int(limit)
+        limit=int(limit)
     )
-    return invoices
+
+# API to fetch full invoice with items
+@frappe.whitelist()
+def get_invoice_with_items(invoice_name):
+    invoice = frappe.get_doc("Sales Invoice", invoice_name)
+    # Convert to dict for frontend
+    return {
+        "name": invoice.name,
+        "customer": invoice.customer,
+        "posting_date": invoice.posting_date,
+        "items": [dict(i) for i in invoice.items]
+    }
