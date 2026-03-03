@@ -983,6 +983,20 @@ export async function get_invoice_json(invoice_name) {
     "get invoice json"
   );
 }
+export async function get_shift_json(invoice_name) {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.get_shift_json",
+        {
+          invoice_name: invoice_name,
+        }
+      );
+      return message;
+    },
+    "get invoice json"
+  );
+}
 
 /**
  * Create a new customer.
