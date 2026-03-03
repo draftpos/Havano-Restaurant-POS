@@ -390,56 +390,55 @@ const getVariance = (paid, key) => {
                           // console.table(tableData);
                           // Call the wrapper function
                           try {
-   try {
-    // Step 1: Get the current shift status
-    const statusRes = await fetch("/api/method/havano_restaurant_pos.api.get_user_shift_status", {
-      method: "GET",
-      credentials: "include",
-    });
-    const statusData = await statusRes.json();
+                              try {
+                                // Step 1: Get the current shift status
+                                const statusRes = await fetch("/api/method/havano_restaurant_pos.api.get_user_shift_status", {
+                                  method: "GET",
+                                  credentials: "include",
+                                });
+                                const statusData = await statusRes.json();
 
-    if (!statusData.message || !statusData.message.shift_name) {
-      throw new Error("No active shift found for this user");
-    }
+                                if (!statusData.message || !statusData.message.shift_name) {
+                                  throw new Error("No active shift found for this user");
+                                }
 
-    const shiftName = statusData.message.shift_name;
+                                const shiftName = statusData.message.shift_name;
 
-    // Step 2: Fetch full shift JSON
-    const shiftJsonRes = await fetch(`/api/method/havano_restaurant_pos.api.get_shift_json?shift_name=${shiftName}`, {
-      method: "GET",
-      credentials: "include",
-    });
-    const shiftJsonData = await shiftJsonRes.json();
-    console.log("Full shift JSON data:", shiftJsonData);
+                                // Step 2: Fetch full shift JSON
+                                const shiftJsonRes = await fetch(`/api/method/havano_restaurant_pos.api.get_shift_json?shift_name=${shiftName}`, {
+                                  method: "GET",
+                                  credentials: "include",
+                                });
+                                const shiftJsonData = await shiftJsonRes.json();
+                                console.log("Full shift JSON data:", shiftJsonData);
 
-    // Step 3: Prepare final data
-    const finalData = { ...(shiftJsonData.message || {})};
+                                // Step 3: Prepare final data
+                                const finalData = { ...(shiftJsonData.message || {})};
 
-    // Step 4: Download as file
-    const blob = new Blob([JSON.stringify(finalData)], { type: "application/json" });
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = `${shiftName}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+                                // Step 4: Download as file
+                                const blob = new Blob([JSON.stringify(finalData)], { type: "application/json" });
+                                const blobUrl = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = blobUrl;
+                                a.download = `${shiftName}.txt`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
 
-  } catch (err) {
-    console.error("Shift JSON download failed:", err);
-  }
+                              } catch (err) {
+                                console.error("Shift JSON download failed:", err);
+                              }
                             await updateUserShiftPayments(tableData);
                             console.log("Table data:", tableData);
                             toast.success("Shift payments updated successfully!");
                             
-                         
                             onOpenChange(false)
                           } catch (err) {
                             // console.error("Error updating shift payments:", err);
                             toast.error("Failed to update shift payments!");
                           }
-                        //  window.location.href = "/dashboard";
+                        window.location.href = "/dashboard";
                         })}
                       >
                         Close Shift

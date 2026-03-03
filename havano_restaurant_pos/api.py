@@ -5535,7 +5535,7 @@ def get_latest_invoices(limit=3):
         "Sales Invoice",
         fields=["name", "customer"],
         order_by="creation desc",
-        limit=int(limit)
+      
     )
 
 # API to fetch full invoice with items
@@ -5604,3 +5604,39 @@ def create_credit_note(original_invoice, items):
     return {
         "sales_invoice": credit.name
     }
+
+import frappe
+from frappe.utils import flt
+
+def _build_shift_json(shift_doc):
+    # Payment details
+    payment_list = []
+    if hasattr(shift_doc, "shift_amounts"):
+        for row in shift_doc.shift_amounts:
+            payment_list.append({
+                "PaymentMethod": row.payment_method,
+                "AmountExpected": flt(row.amount),
+                "AmountSubmitted": flt(row.amount_submitted),
+                "Variance": flt(row.amount_submitted) - flt(row.amount)
+            })
+    
+    return {
+        "ShiftNo": shift_doc.name,
+        "ShiftStart": getattr(shift_doc, "shift_start", ""),
+        "ShiftEnd": getattr(shift_doc, "shift_end", ""),
+        "CashierName": shift_doc.user,
+        "PaymentDetails": payment_list,
+        "TotalExpected": sum(flt(row.amount) for row in getattr(shift_doc, "shift_amounts", [])),
+        "TotalSubmitted": sum(flt(row.amount_submitted) for row in getattr(shift_doc, "shift_amounts", [])),
+        "TotalVariance": sum(flt(row.amount_submitted) - flt(row.amount) for row in getattr(shift_doc, "shift_amounts", [])),
+    }
+
+@frappe.whitelist()
+def get_shift_json(shift_name):
+    try:
+        shift = frappe.get_doc("HA Shift POS", shift_name)
+        return _build_shift_json(shift)
+    except frappe.DoesNotExistError:
+        frappe.throw(f"Shift {shift_name} does not exist")
+    except Exception as e:
+        frappe.throw(f"Error generating shift JSON: {str(e)}")

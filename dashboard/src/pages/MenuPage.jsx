@@ -7,6 +7,7 @@ import Container from "@/components/Shared/Container";
 import { useCartStore } from "@/stores/useCartStore";
 import { useNavigate } from "react-router-dom";
 import { MenuProvider } from "@/contexts/MenuContext";
+import { db, call } from "@/lib/frappeClient";
 
 const MenuPage = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const MenuPage = () => {
   const [loadingMode, setLoadingMode] = useState(true);
 
   const { selectedReceipt, setSelectedReceipt } = useCartStore();
+  const [hideDineTakeAway, setHideDineTakeAway] = useState(false);
 
   useEffect(() => {
     const checkMode = async () => {
@@ -31,6 +33,19 @@ const MenuPage = () => {
   const handleDineInClick = () => {
     navigate("/tables");
   };
+  useEffect(() => {
+  const loadSettings = async () => {
+  const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+    const doc = settingsResponse?.message?.data;
+    console.log("HA POS Settings loaded:", doc);
+
+    if (doc) {
+      setHideDineTakeAway(!!doc.hide_dinetakeaway);
+    }
+  };
+
+  loadSettings();
+}, []);
 
   const handleTakeAwayClick = () => {
     startNewTakeAwayOrder();
@@ -53,6 +68,9 @@ const MenuPage = () => {
   <div className="col-span-5 min-w-0">
     <div className="flex items-center gap-4 justify-between">
       {/* Left: Dine In / Take Away */}
+      {!hideDineTakeAway && (
+
+
       <div className="flex items-center gap-2">
         <label
           className={`${!isRestMode ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
@@ -100,6 +118,7 @@ const MenuPage = () => {
           </span>
         </label>
       </div>
+      )}
 
       {/* Right: new receipt options */}
       <div className="flex items-center gap-2">
