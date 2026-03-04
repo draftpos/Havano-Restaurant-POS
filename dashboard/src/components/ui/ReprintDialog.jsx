@@ -59,6 +59,7 @@ const ReprintDialog = ({ open, onOpenChange, onReprint }) => {
         typeof onReprint === "function" && onReprint(invoiceNumber);
         setInvoiceNumber("");
         onOpenChange(false);
+        
       } else {
         // Not allowed → show OptionsDialog on top
         setPendingInvoice(invoiceNumber);
@@ -77,6 +78,7 @@ const ReprintDialog = ({ open, onOpenChange, onReprint }) => {
     setPendingInvoice("");
     setInvoiceNumber("");
     setShowOptions(false);
+    onOpenChange(false);
   };
 
   const handleCancel = () => {

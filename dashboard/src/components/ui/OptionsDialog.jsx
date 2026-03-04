@@ -32,34 +32,31 @@ const OptionsDialog = ({
   if (!open) return null;
 
 const handleConfirm = async () => {
-  if (!username.trim() || !password.trim()) {
-    toast.error("Username and password required");
+  if (!password.trim()) {
+    toast.error("Password required");
     return;
   }
 
   try {
-    const { message } = await validateOverrideUser(username, password);
+        const response = await validateOverrideUser(password);
 
-    if (true) {
-    //   toast.success("Authorization successful");
-      onConfirm({ username });
-      onOpenChange(false);
-      setUsername("");
-      setPassword("");
-    onOpenChange(false);
-    } else {
-      toast.error("Invalid credentials");
-    }
-  } catch (err) {
-    console.error(err);
-    toast.error("Authorization failed");
-  }
-};
-  const handleCancel = () => {
-    setUsername("");
-    setPassword("");
-    onOpenChange(false);
-  };
+        if (response?.authorized) {
+        onConfirm?.({ username: "override_user" });
+        onOpenChange(false);
+        setPassword("");
+        } else {
+        toast.error("Invalid credentials");
+        }
+        } catch (err) {
+            console.error(err);
+            toast.error("Authorization failed");
+        }
+    };
+    const handleCancel = () => {
+        setUsername("");
+        setPassword("");
+        onOpenChange(false);
+    };
 
   return (
     <div
@@ -69,13 +66,13 @@ const handleConfirm = async () => {
       <div className="bg-white p-6 rounded shadow-lg w-[400px] relative z-50">
         <h2 className="text-xl font-bold mb-4">{title}</h2>
 
-        <input
+        {/* <input
           type="text"
           placeholder="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           className="w-full border border-gray-300 rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-400"
-        />
+        /> */}
 
         <input
           type="password"

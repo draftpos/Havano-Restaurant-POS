@@ -850,11 +850,11 @@ export async function openShift() {
     return message;
   }, "Open shift");
 }
-export async function validateOverrideUser(username, password) {
+export async function validateOverrideUser(password) {
   return attemptWithRetries(async () => {
     const { message } = await call.post(
       "havano_restaurant_pos.api.validate_override_user",
-      { username, password }
+      {password }
     );
 
     if (!message) {

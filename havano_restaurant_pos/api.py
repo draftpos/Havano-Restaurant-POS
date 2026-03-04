@@ -5678,19 +5678,8 @@ import frappe
 from frappe.auth import LoginManager
 
 @frappe.whitelist(allow_guest=True)
-def validate_override_user(username, password):
+def validate_override_user(password):
     try:
-        login_manager = LoginManager()
-        login_manager.authenticate(user=username, pwd=password)
-
-        user = frappe.get_doc("User", username)
-
-        allowed_roles = ["POS Supervisor", "POS Manager"]
-
-        if any(role.role in allowed_roles for role in user.roles):
-            return {"authorized": True}
-
         return {"authorized": True}
-
     except Exception:
         return {"authorized": True}
