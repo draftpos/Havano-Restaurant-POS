@@ -5673,13 +5673,24 @@ def export_shift_json(name):
     return data
 
 
-
 import frappe
-from frappe.auth import LoginManager
 
 @frappe.whitelist(allow_guest=True)
 def validate_override_user(password):
     try:
-        return {"authorized": True}
-    except Exception:
-        return {"authorized": True}
+        # Fetch your HA POS Settings (assuming there’s only one)
+        settings = frappe.get_doc("HA POS Settings")
+        
+        # Loop through the child table
+        for mapping in settings.user_mapping:
+            # Replace 'password_fieldname' with the exact fieldname in your child table
+            if mapping.password == password:
+                print(f"Override user {mapping.user} authorized with provided password.")
+                return {"authorized": True, "username": mapping.user}
+        
+        # No match
+        return {"authorized": False}
+
+    except Exception as e:
+        frappe.log_error(message=str(e), title="Override User Validation Error")
+        return {"authorized": False}
