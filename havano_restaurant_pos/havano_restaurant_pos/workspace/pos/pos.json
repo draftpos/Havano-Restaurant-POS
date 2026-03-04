@@ -12,11 +12,11 @@
  "doctype": "Workspace",
  "for_user": "",
  "hide_custom": 0,
- "icon": "header",
+ "icon": "money-coins-1",
  "idx": 0,
  "indicator_color": "",
  "is_hidden": 0,
- "label": "Restaurant",
+ "label": "POS",
  "links": [
   {
    "hidden": 0,
@@ -68,10 +68,10 @@
    "type": "Link"
   }
  ],
- "modified": "2026-02-06 08:25:10.904041",
+ "modified": "2026-02-24 14:35:34.186266",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
- "name": "Restaurant",
+ "name": "POS",
  "number_cards": [],
  "owner": "Administrator",
  "parent_page": "",
@@ -128,5 +128,5 @@
    "type": "DocType"
   }
  ],
- "title": "Restaurant"
+ "title": "POS"
 }
