@@ -13,7 +13,11 @@
   "shift_end",
   "display_date",
   "section_break_xjwz",
-  "shift_amounts"
+  "shift_amounts",
+  "section_break_oexn",
+  "total_submitted",
+  "column_break_csah",
+  "total_variance"
  ],
  "fields": [
   {
@@ -79,12 +83,31 @@
    "fieldname": "display_date",
    "fieldtype": "Date",
    "label": "Display Date"
+  },
+  {
+   "fieldname": "section_break_oexn",
+   "fieldtype": "Section Break",
+   "label": "Summary (Base Currency)"
+  },
+  {
+   "fieldname": "total_submitted",
+   "fieldtype": "Float",
+   "label": "Total Submitted"
+  },
+  {
+   "fieldname": "column_break_csah",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_variance",
+   "fieldtype": "Float",
+   "label": "Total Variance"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-16 16:41:52.014141",
+ "modified": "2026-03-03 14:37:00.875097",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA Shift POS",

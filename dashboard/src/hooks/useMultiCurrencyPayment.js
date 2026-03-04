@@ -3,6 +3,7 @@ import { call } from "@/lib/frappeClient";
 import { useCartStore } from "@/stores/useCartStore";
 import { getDefaultCustomer } from "@/lib/utils";
 import { createInvoiceAndPaymentQueue, get_invoice_json, savePaymentsToShift } from "@/lib/utils";
+import { toast, Toaster } from "sonner";
 
 function useMultiCurrencyPayment() {
 	const [loading, setLoading] = useState(false);
@@ -104,6 +105,7 @@ function useMultiCurrencyPayment() {
 					}
 				} catch (err) {
 					console.error("Error triggering invoice download:", err);
+					toast.error("Invoice not found for download!");
 				}
 			}
 			return res;

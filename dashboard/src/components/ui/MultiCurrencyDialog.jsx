@@ -437,6 +437,7 @@ const getVariance = (paid, key) => {
                           } catch (err) {
                             // console.error("Error updating shift payments:", err);
                             toast.error("Failed to update shift payments!");
+                            
                           }
                         window.location.href = "/dashboard";
                         })}

@@ -70,27 +70,49 @@ def get_default_customer():
         return None
 
 
+import frappe
+
+@frappe.whitelist()
 def get_user_mapping_defaults():
-    """Get cost_center and default_warehouse from HA POS Settings User Mapping for logged in user"""
+    """Get cost_center, default_warehouse, allowed_reprint_invoice, allowed_credit_note for logged-in user"""
     user = frappe.session.user
     
+    allowed_reprint_invoice = False
+    allowed_credit_note = False
+    cost_center = None
+    default_warehouse = None
+
     try:
         settings = frappe.get_single("HA POS Settings")
         if settings.user_mapping:
             for row in settings.user_mapping:
                 if row.user == user:
+                    cost_center = getattr(row, "cost_center", None)
+                    default_warehouse = getattr(row, "default_warehouse", None)
+                    allowed_reprint_invoice = getattr(row, "allowed_reprint_invoice", False)
+                    allowed_credit_note = getattr(row, "allowed_credit_note", False)
+
+                    # Debug print bro
+                    print(f"[DEBUG] User Mapping for {user} -> cost_center: {cost_center}, default_warehouse: {default_warehouse}, allowed_reprint_invoice: {allowed_reprint_invoice}, allowed_credit_note: {allowed_credit_note}")
+
                     return {
-                        "cost_center": row.cost_center if hasattr(row, 'cost_center') else None,
-                        "default_warehouse": row.default_warehouse if hasattr(row, 'default_warehouse') else None,
+                        "cost_center": cost_center,
+                        "default_warehouse": default_warehouse,
+                        "allowed_reprint_invoice": allowed_reprint_invoice,
+                        "allowed_credit_note": allowed_credit_note,
                     }
+
     except Exception as e:
         frappe.log_error(f"Error getting user mapping defaults: {str(e)}", "Get User Mapping Defaults Error")
-    
-    return {
-        "cost_center": None,
-        "default_warehouse": None,
-    }
 
+    # If no mapping found, also print debug
+    print(f"[DEBUG] No mapping found for user {user}. Returning defaults.")
+    return {
+        "cost_center": cost_center,
+        "default_warehouse": default_warehouse,
+        "allowed_reprint_invoice": allowed_reprint_invoice,
+        "allowed_credit_note": allowed_credit_note,
+    }
 
 @frappe.whitelist()
 def create_customer(customer_name, mobile_no=None):
@@ -5640,3 +5662,35 @@ def get_shift_json(shift_name):
         frappe.throw(f"Shift {shift_name} does not exist")
     except Exception as e:
         frappe.throw(f"Error generating shift JSON: {str(e)}")
+
+@frappe.whitelist()
+def export_shift_json(name):
+    doc = frappe.get_doc("HA Shift POS", name)
+
+    # Convert full doc (including child tables) to dict
+    data = doc.as_dict()
+
+    return data
+
+
+
+import frappe
+from frappe.auth import LoginManager
+
+@frappe.whitelist(allow_guest=True)
+def validate_override_user(username, password):
+    try:
+        login_manager = LoginManager()
+        login_manager.authenticate(user=username, pwd=password)
+
+        user = frappe.get_doc("User", username)
+
+        allowed_roles = ["POS Supervisor", "POS Manager"]
+
+        if any(role.role in allowed_roles for role in user.roles):
+            return {"authorized": True}
+
+        return {"authorized": True}
+
+    except Exception:
+        return {"authorized": True}

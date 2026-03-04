@@ -843,13 +843,28 @@ export async function getItemVariants(itemName) {
     return message; // array of actual variant items
   }, "Failed to fetch item variants");
 }
+
 export async function openShift() {
   return attemptWithRetries(async () => {
     const { message } = await call.post("havano_restaurant_pos.api.open_shift", {});
     return message;
   }, "Open shift");
 }
+export async function validateOverrideUser(username, password) {
+  return attemptWithRetries(async () => {
+    const { message } = await call.post(
+      "havano_restaurant_pos.api.validate_override_user",
+      { username, password }
+    );
 
+    if (!message) {
+      console.warn("Authorization failed for user:", username);
+      return { authorized: false };
+    }
+
+    return message; // { authorized: true/false }
+  }, "Failed to validate override user");
+}
 export async function closeShift() {
   return attemptWithRetries(async () => {
     const { message } = await call.post("havano_restaurant_pos.api.close_shift", {});

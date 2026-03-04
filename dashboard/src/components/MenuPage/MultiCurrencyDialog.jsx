@@ -95,6 +95,7 @@ export default function MultiCurrencyDialog({
         
         // Get all selected payment methods (show all regardless of currency)
         const selectedMethods = doc?.selected_payment_methods || [];
+        console.log("Selected payment methods from settings:", selectedMethods);
         
         // Build payment methods list with mode, currency, and exchange rate
         const methodsList = [];
