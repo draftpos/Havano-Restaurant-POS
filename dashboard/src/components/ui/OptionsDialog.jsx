@@ -20,9 +20,9 @@ const OptionsDialog = ({
     if (!open) return;
 
     const handleClickOutside = (e) => {
-      if (overlayRef.current && e.target === overlayRef.current) {
-        onOpenChange(false);
-      }
+ if (overlayRef.current && !overlayRef.current.firstChild.contains(e.target)) {
+  onOpenChange(false);
+}
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -59,11 +59,11 @@ const handleConfirm = async () => {
     };
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 flex items-center justify-center bg-black/50 z-50"
-    >
-      <div className="bg-white p-6 rounded shadow-lg w-[400px] relative z-50">
+  <div
+  ref={overlayRef}
+  className="fixed inset-0 flex items-center justify-center bg-black/50 z-[9999]"
+>
+  <div className="bg-white p-6 rounded shadow-lg w-[400px] relative z-[10000]">
         <h2 className="text-xl font-bold mb-4">{title}</h2>
 
         {/* <input

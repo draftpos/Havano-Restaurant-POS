@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { get_invoice_json } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { toast } from "sonner";
-
+import OptionsDialog from "./OptionsDialog"; // make sure to import
 
 const CreditNoteDialog = ({ open, onOpenChange }) => {
   const [search, setSearch] = useState("");
   const [invoices, setInvoices] = useState([]);
   const [filtered, setFiltered] = useState([]);
+  const [showOptions, setShowOptions] = useState(false);
+  const [pendingInvoice, setPendingInvoice] = useState("");
   const modalRef = useRef();
 
   const addToCart = useCartStore((state) => state.addToCart);
@@ -17,17 +19,16 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (modalRef.current && !modalRef.current.contains(e.target)) {
-        onOpenChange(false);
+        // onOpenChange(false);
       }
     };
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, onOpenChange]);
 
-  // Fetch latest invoices (lightweight)
+  // Fetch latest invoices
   useEffect(() => {
     if (!open) return;
-
     fetch("/api/method/havano_restaurant_pos.api.get_latest_invoices")
       .then((res) => res.json())
       .then((data) => {
@@ -45,33 +46,27 @@ const CreditNoteDialog = ({ open, onOpenChange }) => {
   // Filter as user types
   useEffect(() => {
     if (!Array.isArray(invoices)) return;
-
-    if (!search.trim()) {
-      setFiltered(invoices);
-    } else {
-      const filteredInvoices = invoices.filter((inv) =>
-        (inv.name || inv.sales_invoice || "").toLowerCase().includes(search.toLowerCase())
+    if (!search.trim()) setFiltered(invoices);
+    else {
+      setFiltered(
+        invoices.filter((inv) =>
+          (inv.name || inv.sales_invoice || "")
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        )
       );
-      setFiltered(filteredInvoices);
     }
   }, [search, invoices]);
 
-  if (!open) return null;
-
-const handleSelect = async (invoiceName) => {
-  if (!invoiceName) return;
-
-  try {
+  const processInvoice = async (invoiceName) => {
     const invoiceData = await get_invoice_json(invoiceName);
-
-    const items = Array.isArray(invoiceData?.itemlist)
-      ? invoiceData.itemlist
-      : [];
+    const items = Array.isArray(invoiceData?.itemlist) ? invoiceData.itemlist : [];
 
     if (!items.length) {
       toast.error("No items found in this invoice");
       return;
     }
+
     setCreditNoteMode(invoiceName);
 
     items.forEach((item) => {
@@ -79,7 +74,7 @@ const handleSelect = async (invoiceName) => {
         name: item.productid || item.ProductName,
         item_name: item.ProductName,
         custom_menu_category: "General",
-        quantity: -Math.abs(item.Qty || 1), // 🔥 NEGATIVE
+        quantity: -Math.abs(item.Qty || 1),
         uom: "Unit",
         price: item.Price ?? 0,
         standard_rate: item.Price ?? 0,
@@ -90,57 +85,98 @@ const handleSelect = async (invoiceName) => {
     toast.success(`${items.length} item(s) added from invoice ${invoiceName}`);
     setSearch("");
     onOpenChange(false);
+  };
 
-  } catch (err) {
-    console.error(err);
-    toast.error(`Failed to load invoice ${invoiceName}`);
-  }
-};
+  const handleSelect = async (invoiceName) => {
+    if (!invoiceName) return;
+
+    try {
+      const res = await fetch(
+        "/api/method/havano_restaurant_pos.api.get_user_mapping_defaults"
+      );
+      const userSettings = await res.json();
+      const allowed = userSettings?.message?.allowed_credit_note;
+
+      if (allowed) {
+        await processInvoice(invoiceName);
+      } else {
+        setPendingInvoice(invoiceName);
+     
+        setShowOptions(true);
+        
+
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(`Failed to load invoice ${invoiceName}`);
+    }
+  };
+
+  const handleActualSelect = async () => {
+    await processInvoice(pendingInvoice);
+    setPendingInvoice("");
+    setShowOptions(false);
+  };
+
+  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div ref={modalRef} className="bg-white p-6 rounded shadow-lg w-[400px]">
-        <h2 className="text-xl font-bold mb-4">Create Credit Note</h2>
+    <>
+      {/* Main Dialog */}
+      <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+        <div ref={modalRef} className="bg-white p-6 rounded shadow-lg w-[400px]">
+          <h2 className="text-xl font-bold mb-4">Create Credit Note</h2>
 
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search Invoice"
-          className="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-green-400"
-        />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Invoice"
+            className="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-green-400"
+          />
 
-        <ul className="max-h-40 overflow-y-auto mb-4 border border-gray-200 rounded">
-          {(Array.isArray(filtered) ? filtered : []).map((inv) => {
-            const displayName = inv.sales_invoice || inv.name;
-            return (
-              <li
-                key={displayName}
-                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => handleSelect(displayName)}
-              >
-                {displayName} - {inv.customer || "N/A"}
-              </li>
-            );
-          })}
-          {(Array.isArray(filtered) ? filtered : []).length === 0 && (
-            <li className="px-3 py-2 text-gray-400">No invoices found</li>
-          )}
-        </ul>
+          <ul className="max-h-40 overflow-y-auto mb-4 border border-gray-200 rounded">
+            {filtered.length
+              ? filtered.map((inv) => {
+                  const displayName = inv.sales_invoice || inv.name;
+                  return (
+                    <li
+                      key={displayName}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => handleSelect(displayName)}
+                    >
+                      {displayName} - {inv.customer || "N/A"}
+                    </li>
+                  );
+                })
+              : (
+                <li className="px-3 py-2 text-gray-400">No invoices found</li>
+              )}
+          </ul>
 
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={() => {
-              setSearch("");
-              onOpenChange(false);
-            }}
-            className="px-4 py-2 bg-gray-300 text-gray-800 rounded font-bold hover:bg-gray-400 transition"
-          >
-            Cancel
-          </button>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setSearch("");
+                onOpenChange(false);
+              }}
+              className="px-4 py-2 bg-gray-300 text-gray-800 rounded font-bold hover:bg-gray-400 transition"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* OptionsDialog */}
+      <OptionsDialog
+        open={showOptions}
+        onOpenChange={setShowOptions}
+        title="Supervisor Authorization Required"
+        confirmText="Authorize & Continue"
+        onConfirm={handleActualSelect}
+      />
+    </>
   );
 };
 
