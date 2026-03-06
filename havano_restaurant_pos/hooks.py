@@ -295,7 +295,11 @@ fixtures = [
     {
         "dt": "Client Script",
         "filters": [
-            ["name", "in", ["print invoice"]]
+            ["name", "in", [
+                "print invoice",
+                "Ha Pos Settings filter",
+                "Cost Center Details filter",
+        ]]
         ]
     }
 ]

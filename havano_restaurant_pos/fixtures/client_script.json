@@ -9,5 +9,27 @@
   "name": "print invoice",
   "script": "frappe.ui.form.on('Sales Invoice', {\n    refresh: function(frm) {\n        frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(function(can_print_invoice) {\n            frm.can_print_invoice = can_print_invoice;\n            if (can_print_invoice) {\n                frm.add_custom_button(__('Print Invoice'), function() {\n                    downloadInvoice(frm.doc.name);\n                }, __('Actions'));\n            }\n        });\n    },\n    on_submit: function(frm) {\n        if (frm.doc.docstatus !== 1) return;\n        var doDownload = function(can_print) {\n            if (can_print) downloadInvoice(frm.doc.name);\n        };\n        if (frm.can_print_invoice !== undefined) {\n            doDownload(frm.can_print_invoice);\n        } else {\n            frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(doDownload);\n        }\n    }\n});\n\nfunction downloadInvoice(invoiceNumber) {\n    var url = frappe.urllib.get_full_url(\n        '/api/method/havano_restaurant_pos.api.download_invoice_json?name=' +\n        encodeURIComponent(invoiceNumber) + '&receipt_type='\n    );\n    var a = document.createElement('a');\n    a.href = url;\n    a.download = invoiceNumber + '.txt';\n    a.target = '_blank';\n    document.body.appendChild(a);\n    a.click();\n    document.body.removeChild(a);\n}",
   "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Cost Center Details",
+  "enabled": 1,
+  "modified": "2026-03-06 09:31:30.060719",
+  "module": "Havano Restaurant Pos",
+  "name": "Cost Center Details filter",
+  "script": "frappe.ui.form.on(\"Cost Center Details\", {\n    company_name: function(frm) {\n        // reset cost center when company changes\n        frm.set_value(\"cost_center\", \"\");\n\n        // filter cost center options based on selected company\n        frm.set_query(\"cost_center\", function() {\n            return {\n                filters: {\n                    company: frm.doc.company_name\n                }\n            };\n        });\n    },\n\n    onload: function(frm) {\n        if (frm.doc.company_name) {\n            frm.set_query(\"cost_center\", function() {\n                return {\n                    filters: {\n                        company: frm.doc.company_name\n                    }\n                };\n            });\n        }\n    }\n});",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "HA POS Settings",
+  "enabled": 1,
+  "modified": "2026-03-06 09:42:27.117874",
+  "module": "Havano Restaurant Pos",
+  "name": "Ha Pos Settings filter",
+  "script": "frappe.ui.form.on(\"HA POS Settings\", {\n    onload: function(frm) {\n        // set dynamic query for cost_center field in child table\n        frm.fields_dict['user_mapping'].grid.get_field('cost_center').get_query = function(doc, cdt, cdn) {\n            let row = locals[cdt][cdn];\n            return {\n                filters: {\n                    company_name: row.company  // filter Cost Center Details where company_name matches row's company\n                }\n            };\n        }\n    }\n});",
+  "view": "Form"
  }
 ]
