@@ -10,13 +10,14 @@
   "type",
   "company",
   "cost_center",
+  "warehouse",
   "column_break_vzsy",
+  "price_list",
   "email",
   "address_line_1",
   "address_line_2",
   "phone",
   "column_break_trdm",
-  "price_list",
   "allowed_credit_note",
   "allowed_reprint_invoice",
   "password"
@@ -108,13 +109,20 @@
    "fieldname": "password",
    "fieldtype": "Data",
    "label": "Password"
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-03-04 09:28:28.473224",
+ "modified": "2026-03-06 13:18:51.923841",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "Ha User Mapping",

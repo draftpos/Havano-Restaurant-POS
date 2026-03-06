@@ -44,7 +44,7 @@ def get_last_open_shift_for_current_user():
     return None
 
 @frappe.whitelist()
-def get_pos_user_company_and_cost_center():
+def get_pos_user_company_cost_center_and_warehouse():
     user = frappe.session.user
 
     settings = frappe.get_doc("HA POS Settings")
@@ -53,7 +53,8 @@ def get_pos_user_company_and_cost_center():
         if row.user == user:
             return {
                 "company": row.company,
-                "cost_center": row.cost_center
+                "cost_center": row.cost_center,
+                "warehouse": row.warehouse
             }
 
     frappe.throw(f"User {user} is not mapped in HA POS Settings")
@@ -70,9 +71,11 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
 
 
     try:
-        defaults = get_pos_user_company_and_cost_center()
+        defaults = get_pos_user_company_cost_center_and_warehouse()
         company = defaults.get("company")
         cost_center = defaults.get("cost_center")
+        warehouse = defaults.get("warehouse")
+        print(f"Defaults for user {frappe.session.user}: Company={company}, Cost Center={cost_center}, Warehouse={warehouse}")
 
         def get_usd_exchange_rate(to_currency):
             """Return exchange rate from USD to the given currency"""
@@ -179,7 +182,7 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
             qty = float(item_data.get("qty") or 1)
             item_code = item_data.get("item_code")
             details = item_details_map.get(item_code, {})
-
+          
             # Convert rate if invoice currency is not USD
             if currency != "USD":
                 rate = rate * conversion_rate
@@ -190,6 +193,7 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
                 "qty": qty,
                 "rate": rate,
                 "cost_center": cost_center,
+                "warehouse": warehouse,
                 "custom_remarks": item_data.get("remarks") or "",
                 "uom": uom or details.get("stock_uom"),
             })
