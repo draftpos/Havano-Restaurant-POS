@@ -133,7 +133,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-03-03 08:49:54.789708",
+ "modified": "2026-03-06 14:52:11.607433",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA POS Settings",
@@ -148,6 +148,14 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Guest",
+   "share": 1
   }
  ],
  "row_format": "Dynamic",
