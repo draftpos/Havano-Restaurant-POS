@@ -153,6 +153,9 @@ doc_events = {
         "before_submit": "havano_restaurant_pos.doc_events.sales_invoice_before_submit",
         "on_submit": "havano_restaurant_pos.doc_events.sales_invoice_on_submit",
     },
+    "Item": {
+        "get_list": "havano_restaurant_pos.api.filter_disabled_items"
+    }
 }
 
 # Scheduled Tasks
@@ -296,3 +299,4 @@ fixtures = [
         ]
     }
 ]
+# in your custom app hooks.py

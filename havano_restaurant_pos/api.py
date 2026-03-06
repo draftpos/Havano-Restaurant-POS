@@ -3143,7 +3143,7 @@ def _build_invoice_json(invoice_doc, cost_center_doc=None):
         "TIN": company_fields.get("tax_id") or "",
         "VATNo": "",
         "InvoiceNo": invoice_doc.name,
-        "KOT": getattr(invoice_doc, "custom_kot", ""),
+        "KOT": invoice_doc.name[-4:],
         "InvoiceDate": invoice_doc.creation.strftime("%Y-%m-%d"),
         "CashierName": invoice_doc.owner,
         "CustomerName": invoice_doc.customer_name,
@@ -5694,3 +5694,18 @@ def validate_override_user(password):
     except Exception as e:
         frappe.log_error(message=str(e), title="Override User Validation Error")
         return {"authorized": False}
+
+@frappe.whitelist(allow_guest=True)
+def filter_disabled_items(doctype, txt, filters, limit_start, limit_page_length, order_by):
+    print("item list invoked with filters:", filters)
+    if not filters:
+        filters = {}
+    filters["disabled"] = 0  # hide disabled
+    return frappe.get_list(
+        doctype,
+        fields=["name", "item_name", "item_code"],
+        filters=filters,
+        limit_start=limit_start,
+        limit_page_length=limit_page_length,
+        order_by=order_by
+    )
