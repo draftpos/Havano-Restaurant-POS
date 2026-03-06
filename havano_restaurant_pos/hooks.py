@@ -300,8 +300,9 @@ fixtures = [
                 "print invoice",
                 "Ha Pos Settings filter",
                 "Cost Center Details filter",
+                "Sync Cloud Settings"
         ]]
         ]
     }
 ]
-# in your custom app hooks.py
+on_login = "havano_restaurant_pos.api.sync_cloud_settings"
