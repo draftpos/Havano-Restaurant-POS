@@ -44,6 +44,21 @@ def get_last_open_shift_for_current_user():
     return None
 
 @frappe.whitelist()
+def get_pos_user_company_and_cost_center():
+    user = frappe.session.user
+
+    settings = frappe.get_doc("HA POS Settings")
+
+    for row in settings.user_mapping:
+        if row.user == user:
+            return {
+                "company": row.company,
+                "cost_center": row.cost_center
+            }
+
+    frappe.throw(f"User {user} is not mapped in HA POS Settings")
+
+@frappe.whitelist()
 def create_sales_invoice(customer, items, price_list=None, change=None, multi_currency_payments=None, insert_only=False):
     """
     Create a Sales Invoice dynamically, handling single or multiple currencies.
@@ -53,7 +68,11 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
     import json
     import frappe
 
+
     try:
+        defaults = get_pos_user_company_and_cost_center()
+        company = defaults.get("company")
+        cost_center = defaults.get("cost_center")
 
         def get_usd_exchange_rate(to_currency):
             """Return exchange rate from USD to the given currency"""
@@ -138,7 +157,8 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
             "doctype": "Sales Invoice",
             "is_pos": 0,
             "customer": customer,
-            "cost_center": defaults.get("cost_center"),
+            "company": company,
+            "cost_center": cost_center,
             "custom_shift_number": last_shift or "",
             "selling_price_list": defaults.get("price_list") or frappe.db.get_single_value(
                 "Selling Settings", "selling_price_list"
@@ -169,7 +189,7 @@ def create_sales_invoice(customer, items, price_list=None, change=None, multi_cu
                 "item_name": details.get("item_name"),
                 "qty": qty,
                 "rate": rate,
-                "cost_center": defaults.get("cost_center"),
+                "cost_center": cost_center,
                 "custom_remarks": item_data.get("remarks") or "",
                 "uom": uom or details.get("stock_uom"),
             })
