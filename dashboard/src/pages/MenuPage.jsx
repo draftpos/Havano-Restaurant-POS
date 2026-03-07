@@ -121,7 +121,7 @@ const MenuPage = () => {
       )}
 
       {/* Right: new receipt options */}
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         {["Default Receipt", "Prebill", "Table Order", "Prebill Payment"].map((label) => {
           const value = label.toLowerCase().replace(/\s+/g, "-");
           return (
@@ -140,7 +140,7 @@ const MenuPage = () => {
             </label>
           );
         })}
-</div>
+</div> */}
 
     </div>
 
