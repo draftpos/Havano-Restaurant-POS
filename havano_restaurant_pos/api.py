@@ -5720,7 +5720,7 @@ def sync_cloud_settings():
     cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
     if not cloud_url:
         frappe.msgprint("No cloud site URL configured in Sync Settings.")
-        return
+        
 
     # append your resource path
     CLOUD_URL = f"{cloud_url}/api/resource/HA%20POS%20Settings/HA%20POS%20Settings"
@@ -5728,11 +5728,11 @@ def sync_cloud_settings():
     # --- 2️⃣ Pull settings from cloud ---
     resp = requests.get(CLOUD_URL)
     if resp.status_code != 200:
-        frappe.throw(f"Failed to fetch cloud settings: {resp.text}")
+        frappe.msgprint(f"Failed to fetch cloud settings: {resp.text}")
     
     cloud_data = resp.json().get("data")
     if not cloud_data:
-        frappe.throw("No data found in cloud response")
+        frappe.msgprint("No data found in cloud response")
     
     # --- 3️⃣ Ensure default customer exists locally ---
     default_customer = cloud_data.get("default_customer")
