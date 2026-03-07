@@ -305,4 +305,4 @@ fixtures = [
         ]
     }
 ]
-on_login = "havano_restaurant_pos.api.sync_cloud_settings"
+# on_login = "havano_restaurant_pos.api.sync_cloud_settings"
