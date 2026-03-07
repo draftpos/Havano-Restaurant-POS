@@ -70,6 +70,20 @@ def get_default_customer():
         return None
 
 
+def _get_user_mapping_for_current_user():
+    """Get the user mapping row for current user from HA POS Settings."""
+    user = frappe.session.user
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        if settings.user_mapping:
+            for row in settings.user_mapping:
+                if row.user == user:
+                    return row
+    except Exception:
+        pass
+    return None
+
+
 def get_user_mapping_defaults():
     """Get cost_center and default_warehouse from HA POS Settings User Mapping for logged in user"""
     user = frappe.session.user
@@ -1761,6 +1775,50 @@ def convert_quotation_to_sales_invoice_from_cart(
                 "details": f"Quotation {quotation_name} does not exist",
             }
 
+        # Pharmacy: cashier restrictions - cannot modify pharmacy items
+        settings = frappe.get_single("HA POS Settings")
+        user = frappe.session.user
+        is_cashier_only = False
+        pharmacy_activated = bool(getattr(settings, "pharmacy_activated", 0))
+        for row in (settings.user_mapping or []):
+            if row.user == user:
+                is_cashier_only = bool(getattr(row, "is_cashier_only", 0))
+                break
+        if pharmacy_activated and is_cashier_only:
+            quotation = frappe.get_doc("Quotation", quotation_name)
+            pharmacy_items_orig = {}
+            for qitem in quotation.items:
+                if frappe.db.get_value("Item", qitem.item_code, "custom_pharmacy"):
+                    pharmacy_items_orig[qitem.item_code] = float(qitem.qty or 1)
+            for item in items:
+                item_code = item.get("item_code") or item.get("name")
+                if not item_code:
+                    continue
+                qty = float(item.get("qty") or item.get("quantity") or 1)
+                is_pharmacy = frappe.db.get_value("Item", item_code, "custom_pharmacy")
+                if is_pharmacy:
+                    orig_qty = pharmacy_items_orig.get(item_code)
+                    if orig_qty is not None:
+                        if qty != orig_qty:
+                            return {
+                                "success": False,
+                                "message": "Cashier cannot change quantity of pharmacy items",
+                                "details": f"Item {item_code}",
+                            }
+                        del pharmacy_items_orig[item_code]
+                    else:
+                        return {
+                            "success": False,
+                            "message": "Cashier cannot add pharmacy items.",
+                            "details": f"Item {item_code}",
+                        }
+            if pharmacy_items_orig:
+                return {
+                    "success": False,
+                    "message": "Cashier cannot remove pharmacy items.",
+                    "details": f"Missing: {list(pharmacy_items_orig.keys())}",
+                }
+
         # Initialize variables
         items_changed = False
         sales_invoice_name = None
@@ -1849,14 +1907,16 @@ def convert_quotation_to_sales_invoice_from_cart(
                         "details": f"Quantity: {item.get('qty')}, Rate: {item.get('rate')}",
                     }
 
-                quotation.append(
-                    "items",
-                    {
-                        "item_code": item_code,
-                        "qty": qty,
-                        "rate": rate,
-                    },
-                )
+                row = {
+                    "item_code": item_code,
+                    "qty": qty,
+                    "rate": rate,
+                }
+                if item.get("preparation_remark"):
+                    row["custom_preparation_remark"] = str(item.get("preparation_remark"))[:140]
+                if item.get("preparation_remark_free"):
+                    row["custom_preparation_remark_free"] = str(item.get("preparation_remark_free"))[:140]
+                quotation.append("items", row)
 
             quotation.set_missing_values()
             quotation.calculate_taxes_and_totals()
@@ -2088,6 +2148,165 @@ def convert_quotation_to_sales_invoice_from_cart(
 
 
 @frappe.whitelist()
+def update_quotation_from_cart(quotation_name, items, customer, customer_name=None):
+    """Update an existing Quotation with cart items. Does not convert to Sales Invoice.
+
+    Args:
+        quotation_name: Name of the Quotation
+        items: List of items with item_code, qty, rate, preparation_remark, preparation_remark_free
+        customer: Customer ID
+        customer_name: Customer display name (optional)
+    """
+    try:
+        if isinstance(items, str):
+            items = frappe.parse_json(items)
+
+        if not quotation_name:
+            return {"success": False, "message": "Quotation name is required"}
+
+        if not items or not isinstance(items, (list, tuple)):
+            return {"success": False, "message": "Items list is required and must be a list"}
+
+        if not customer:
+            return {"success": False, "message": "Customer is required"}
+
+        if not frappe.db.exists("Quotation", quotation_name):
+            return {
+                "success": False,
+                "message": "Quotation not found",
+                "details": f"Quotation {quotation_name} does not exist",
+            }
+
+        # Pharmacy: cashier restrictions
+        settings = frappe.get_single("HA POS Settings")
+        user = frappe.session.user
+        is_cashier_only = False
+        pharmacy_activated = bool(getattr(settings, "pharmacy_activated", 0))
+        for row in (settings.user_mapping or []):
+            if row.user == user:
+                is_cashier_only = bool(getattr(row, "is_cashier_only", 0))
+                break
+        if pharmacy_activated and is_cashier_only:
+            quotation = frappe.get_doc("Quotation", quotation_name)
+            pharmacy_items_orig = {}
+            for qitem in quotation.items:
+                if frappe.db.get_value("Item", qitem.item_code, "custom_pharmacy"):
+                    pharmacy_items_orig[qitem.item_code] = float(qitem.qty or 1)
+            for item in items:
+                item_code = item.get("item_code") or item.get("name")
+                if not item_code:
+                    continue
+                qty = float(item.get("qty") or item.get("quantity") or 1)
+                is_pharmacy = frappe.db.get_value("Item", item_code, "custom_pharmacy")
+                if is_pharmacy:
+                    orig_qty = pharmacy_items_orig.get(item_code)
+                    if orig_qty is not None:
+                        if qty != orig_qty:
+                            return {
+                                "success": False,
+                                "message": "Cashier cannot change quantity of pharmacy items",
+                                "details": f"Item {item_code}",
+                            }
+                        del pharmacy_items_orig[item_code]
+                    else:
+                        return {
+                            "success": False,
+                            "message": "Cashier cannot add pharmacy items.",
+                            "details": f"Item {item_code}",
+                        }
+            if pharmacy_items_orig:
+                return {
+                    "success": False,
+                    "message": "Cashier cannot remove pharmacy items.",
+                    "details": f"Missing: {list(pharmacy_items_orig.keys())}",
+                }
+
+        quotation = frappe.get_doc("Quotation", quotation_name)
+
+        if quotation.status == "Lost":
+            return {
+                "success": False,
+                "message": "Cannot update a Lost quotation",
+                "details": f"Quotation {quotation_name} has status 'Lost'",
+            }
+
+        if quotation.docstatus == 1:
+            try:
+                quotation.cancel()
+                frappe.db.commit()
+                quotation = frappe.get_doc("Quotation", quotation_name)
+            except Exception as cancel_err:
+                return {
+                    "success": False,
+                    "message": "Cannot update quotation. It may be linked to other documents or already converted.",
+                    "details": str(cancel_err),
+                }
+
+        quotation.party_name = customer
+        quotation.customer_name = customer_name or customer
+
+        quotation.items = []
+        for item in items:
+            item_code = item.get("item_code") or item.get("name")
+            if not item_code:
+                continue
+            if not frappe.db.exists("Item", item_code):
+                return {
+                    "success": False,
+                    "message": f"Item {item_code} does not exist",
+                    "details": f"Please check that item {item_code} exists in the system",
+                }
+            try:
+                qty = float(item.get("qty") or item.get("quantity") or 1)
+                rate = float(item.get("rate") or item.get("price") or 0)
+            except (ValueError, TypeError):
+                return {
+                    "success": False,
+                    "message": f"Invalid quantity or rate for item {item_code}",
+                    "details": f"Quantity: {item.get('qty')}, Rate: {item.get('rate')}",
+                }
+            row = {
+                "item_code": item_code,
+                "qty": qty,
+                "rate": rate,
+            }
+            if item.get("preparation_remark"):
+                row["custom_preparation_remark"] = str(item.get("preparation_remark"))[:140]
+            if item.get("preparation_remark_free"):
+                row["custom_preparation_remark_free"] = str(item.get("preparation_remark_free"))[:140]
+            quotation.append("items", row)
+
+        quotation.set_missing_values()
+        quotation.calculate_taxes_and_totals()
+        quotation.save(ignore_permissions=True)
+        frappe.db.commit()
+
+        if quotation.docstatus != 1:
+            try:
+                quotation.submit()
+                frappe.db.commit()
+            except Exception as submit_err:
+                return {
+                    "success": False,
+                    "message": "Failed to submit quotation",
+                    "details": str(submit_err),
+                }
+
+        return {
+            "success": True,
+            "message": "Quotation updated successfully",
+            "name": quotation_name,
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Update Quotation from Cart Error")
+        return {
+            "success": False,
+            "message": str(e),
+            "details": str(e),
+        }
+
+
+@frappe.whitelist()
 def create_transaction(
     doctype,
     customer,
@@ -2148,11 +2367,13 @@ def create_transaction(
         doc.customer = customer
         doc.company = company
 
-        # For Quotation, set quotation_to and transaction_date
+        # For Quotation, set quotation_to, transaction_date, and agent
         if doctype == "Quotation":
             doc.quotation_to = "Customer"
             doc.party_name = customer
             doc.transaction_date = frappe.utils.today()
+            if agent:
+                doc.custom_agent = str(agent)[:140]
 
         # For Sales Invoice, set posting_date
         if doctype == "Sales Invoice":
@@ -2164,15 +2385,17 @@ def create_transaction(
             item_code = item.get("item_code") or item.get("name")
             qty = float(item.get("qty") or item.get("quantity") or 1)
             rate = float(item.get("rate") or item.get("price") or 0)
-
-            doc.append(
-                "items",
-                {
-                    "item_code": item_code,
-                    "qty": qty,
-                    "rate": rate,
-                },
-            )
+            row = {
+                "item_code": item_code,
+                "qty": qty,
+                "rate": rate,
+            }
+            # Pharmacy: preparation remark (saved) and free hand
+            if item.get("preparation_remark"):
+                row["custom_preparation_remark"] = str(item.get("preparation_remark"))[:140]
+            if item.get("preparation_remark_free"):
+                row["custom_preparation_remark_free"] = str(item.get("preparation_remark_free"))[:140]
+            doc.append("items", row)
 
         # Set missing values and calculate totals
         doc.set_missing_values()
@@ -3012,22 +3235,31 @@ def add_remark(remark_text: str = None):
     if not remark_text or not remark_text.strip():
         frappe.throw(_("Remark cannot be empty"))
 
-    # Check if the remark already exists
+    text = remark_text.strip()
+
+    # Check if the remark already exists (by description)
     existing = frappe.get_all(
-        "Preparation Remark", filters={"remark": remark_text.strip()}, limit=1
+        "Preparation Remark", filters={"description": text}, limit=1
     )
     if existing:
-        return {"status": "exists", "message": "Remark already exists"}
+        return {"status": "exists", "message": "Remark already exists", "remark": text}
+
+    # Generate remark_code from first 20 chars or use simple code
+    remark_code = text[:20] if len(text) >= 20 else text
+    if frappe.db.exists("Preparation Remark", {"remark_code": remark_code}):
+        import uuid
+        remark_code = f"FH-{str(uuid.uuid4())[:8]}"
 
     # Create new document
     doc = frappe.get_doc({
         "doctype": "Preparation Remark",
-        "remark": remark_text.strip()
+        "remark_code": remark_code,
+        "description": text,
     })
     doc.insert()
     frappe.db.commit()
 
-    return {"status": "success", "remark": doc.remark}
+    return {"status": "success", "remark": doc.description}
 
 def _build_invoice_json(invoice_doc, cost_center_doc=None):
     """
@@ -3205,6 +3437,8 @@ def generate_quotation_json(quote_id):
             "qty as Qty",
             "rate as Price",
             "amount as Amount",
+            "custom_preparation_remark",
+            "custom_preparation_remark_free",
         ],
     )
     # print(items)
@@ -3238,6 +3472,13 @@ def generate_quotation_json(quote_id):
         # Add new fields to item
         item["tax_rate"] = tax_rate
         item["tax_amount"] = tax_amount
+        # Preparation remark: use saved or free hand
+        prep_remark = item.get("custom_preparation_remark_free") or ""
+        if not prep_remark and item.get("custom_preparation_remark"):
+            prep_remark = frappe.db.get_value(
+                "Preparation Remark", item.get("custom_preparation_remark"), "description"
+            ) or ""
+        item["PreparationRemark"] = prep_remark
 
     # --- Build JSON Data ---
     date_str = str(quote.creation)
@@ -3280,6 +3521,97 @@ def generate_quotation_json(quote_id):
     }
 
     return data
+
+
+@frappe.whitelist()
+def get_pharmacy_dispense_txt_data(quote_id):
+    """Get pharmacy dispense text file data for Quotation.
+    Returns: Item name, Qty, preparation remark, Pharmacist Name, Cost center Name,
+    Batch No, expiry date, Doctors, Name (agent), Company address, phone.
+    """
+    quote = frappe.get_doc("Quotation", quote_id)
+    user = frappe.session.user
+    pharmacist_name = frappe.db.get_value("User", user, "full_name") or user
+
+    # Get user mapping (cost center, address, phone)
+    cost_center_name = ""
+    address_line_1 = ""
+    address_line_2 = ""
+    phone = ""
+    settings = frappe.get_single("HA POS Settings")
+    for row in (settings.user_mapping or []):
+        if row.user == user:
+            cost_center_name = row.cost_center or ""
+            address_line_1 = getattr(row, "address_line_1", "") or ""
+            address_line_2 = getattr(row, "address_line_2", "") or ""
+            phone = getattr(row, "phone", "") or ""
+            break
+
+    agent_name = getattr(quote, "custom_agent", "") or ""
+
+    items_data = []
+    for item in quote.items:
+        prep_remark = getattr(item, "custom_preparation_remark_free", "") or ""
+        if not prep_remark and getattr(item, "custom_preparation_remark", None):
+            prep_remark = frappe.db.get_value(
+                "Preparation Remark", item.custom_preparation_remark, "description"
+            ) or ""
+        batch_no = getattr(item, "batch_no", "") or ""
+        expiry_date = ""
+        if batch_no:
+            expiry_date = frappe.db.get_value("Batch", batch_no, "expiry_date") or ""
+            if expiry_date:
+                expiry_date = str(expiry_date)
+        items_data.append({
+            "item_name": item.item_name or item.item_code,
+            "qty": item.qty,
+            "preparation_remark": prep_remark,
+            "batch_no": batch_no,
+            "expiry_date": expiry_date,
+        })
+
+    return {
+        "quote_id": quote_id,
+        "pharmacist_name": pharmacist_name,
+        "cost_center_name": cost_center_name,
+        "address_line_1": address_line_1,
+        "address_line_2": address_line_2,
+        "phone": phone,
+        "agent_name": agent_name,
+        "items": items_data,
+        "date": str(quote.creation)[:10] if quote.creation else "",
+    }
+
+
+@frappe.whitelist(allow_guest=False)
+def download_pharmacy_quote_txt():
+    """Download pharmacy dispense text file for a Quotation."""
+    quote_id = frappe.form_dict.get("quote_id") or frappe.form_dict.get("name")
+    if not quote_id:
+        frappe.throw("Quote ID required")
+    data = get_pharmacy_dispense_txt_data(quote_id)
+    lines = [
+        f"Pharmacy Dispense - {data['quote_id']}",
+        f"Date: {data['date']}",
+        f"Pharmacist: {data['pharmacist_name']}",
+        f"Cost Center: {data['cost_center_name']}",
+        f"Address: {data['address_line_1']} {data['address_line_2']}".strip(),
+        f"Phone: {data['phone']}",
+        f"Agent/Doctor: {data['agent_name']}",
+        "",
+        "Items:",
+        "-" * 60,
+    ]
+    for it in data["items"]:
+        lines.append(f"Item: {it['item_name']}")
+        lines.append(f"Qty: {it['qty']}")
+        lines.append(f"Preparation Remark: {it['preparation_remark']}")
+        lines.append(f"Batch No: {it['batch_no']}")
+        lines.append(f"Expiry Date: {it['expiry_date']}")
+        lines.append("-" * 40)
+    frappe.local.response.filename = f"pharmacy_dispense_{data['quote_id']}.txt"
+    frappe.local.response.filecontent = "\n".join(lines)
+    frappe.local.response.type = "download"
 
 
 @frappe.whitelist()
@@ -3351,13 +3683,14 @@ def save_item_preparation_remark(item, remark):
         if not frappe.db.exists("Item", item):
             return {"success": False, "error": f"Item '{item}' does not exist"}
 
-        if frappe.db.exists("Preparation Remark", {"remark": remark}):
+        if frappe.db.exists("Preparation Remark", {"description": remark}):
             prep_remark_name = frappe.db.get_value(
-                "Preparation Remark", {"remark": remark}, "name"
+                "Preparation Remark", {"description": remark}, "name"
             )
         else:
             prep_doc = frappe.new_doc("Preparation Remark")
-            prep_doc.remark = remark
+            prep_doc.remark_code = remark[:20] if len(remark) >= 20 else remark
+            prep_doc.description = remark
             prep_doc.insert(ignore_permissions=True)
             prep_remark_name = prep_doc.name
 
@@ -3371,7 +3704,7 @@ def save_item_preparation_remark(item, remark):
             "custom_preparation_remark",
             {
                 "preparation_remark": prep_remark_name,
-                "remark": remark,
+                "description": remark,
             },
         )
 
@@ -3406,14 +3739,9 @@ def get_item_preparation_remarks(item):
 
         item_doc = frappe.get_doc("Item", item)
 
-        prep_remarks = frappe.get_all("Preparation Remark", pluck="remark")
+        prep_remarks = frappe.get_all("Preparation Remark", pluck="description")
 
-        # remarks = [
-        #     row.remark for row in item_doc.custom_preparation_remark if row.remark
-        # ]
-        print(prep_remarks)
-
-        return {"success": True,"prep_remarks": prep_remarks}
+        return {"success": True, "prep_remarks": prep_remarks}
 
     except Exception as e:
         frappe.log_error(
@@ -3438,6 +3766,72 @@ def get_ha_pos_settings():
             "success": False,
             "error": str(e)
         }
+
+
+@frappe.whitelist()
+def get_pharmacy_user_settings():
+    """Get pharmacy-related settings for current user: is_pharmacist, is_cashier_only, pharmacy_activated"""
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        user = frappe.session.user
+        is_pharmacist = False
+        is_cashier_only = False
+        for row in (settings.user_mapping or []):
+            if row.user == user:
+                is_pharmacist = bool(getattr(row, "is_pharmacist", 0))
+                is_cashier_only = bool(getattr(row, "is_cashier_only", 0))
+                break
+        pharmacy_activated = bool(getattr(settings, "pharmacy_activated", 0))
+        return {
+            "success": True,
+            "pharmacy_activated": pharmacy_activated,
+            "is_pharmacist": is_pharmacist,
+            "is_cashier_only": is_cashier_only,
+        }
+    except Exception as e:
+        frappe.log_error(f"Error fetching pharmacy user settings: {str(e)}")
+        return {"success": False, "pharmacy_activated": False, "is_pharmacist": False, "is_cashier_only": False}
+
+
+@frappe.whitelist()
+def get_items_pharmacy_flags(item_codes):
+    """Return {item_code: custom_pharmacy} for given item codes."""
+    if isinstance(item_codes, str):
+        item_codes = frappe.parse_json(item_codes) if item_codes.startswith("[") else [item_codes]
+    if not item_codes:
+        return {}
+    rows = frappe.get_all(
+        "Item",
+        filters={"name": ["in", item_codes]},
+        fields=["name", "custom_pharmacy"],
+    )
+    return {r["name"]: bool(r.get("custom_pharmacy")) for r in rows}
+
+
+@frappe.whitelist()
+def search_preparation_remarks(search_term=None):
+    """Search preparation remarks by remark_code or description"""
+    try:
+        if not search_term or not str(search_term).strip():
+            remarks = frappe.get_all(
+                "Preparation Remark",
+                fields=["name", "remark_code", "description", "strength"],
+                order_by="description asc",
+                limit=50,
+            )
+        else:
+            term = f"%{str(search_term).strip()}%"
+            remarks = frappe.db.sql("""
+                SELECT name, remark_code, description, strength
+                FROM `tabPreparation Remark`
+                WHERE remark_code LIKE %(term)s OR description LIKE %(term)s
+                ORDER BY description ASC
+                LIMIT 50
+            """, {"term": term}, as_dict=True)
+        return {"success": True, "remarks": remarks}
+    except Exception as e:
+        frappe.log_error(f"Search preparation remarks failed: {str(e)}")
+        return {"success": False, "remarks": []}
 
 
 def is_payment_method_credit(payment_method):
@@ -4530,65 +4924,71 @@ def get_menu_items_with_user_prices():
     """
     Returns all menu items with their prices according to the logged-in user's pricelist.
     """
-    user = frappe.session.user
-    settings = frappe.get_single("HA POS Settings")
+    try:
+        user = frappe.session.user
+        settings = frappe.get_single("HA POS Settings")
 
-    # get user's pricelist
-    user_price_list = None
-    for row in settings.user_mapping:
-        if row.user == user:
-            user_price_list = row.price_list
-            break
+        # get user's pricelist
+        user_price_list = None
+        for row in (settings.user_mapping or []):
+            if row.user == user:
+                user_price_list = row.price_list
+                break
 
-    # get item groups hidden from POS
-    hidden_groups = frappe.get_all(
-        "Item Group",
-        filters={"custom_do_not_show_in_pos": 1},
-        pluck="name"
-    )
-    hidden_groups = set(hidden_groups or [])
+        # get item groups hidden from POS (field may not exist)
+        hidden_groups = set()
+        try:
+            if frappe.get_meta("Item Group").has_field("custom_do_not_show_in_pos"):
+                hidden_groups = set(
+                    frappe.get_all("Item Group", filters={"custom_do_not_show_in_pos": 1}, pluck="name") or []
+                )
+        except Exception:
+            pass
 
-    # fetch all menu items visible in POS
-    items = frappe.get_all(
-    "Item",
-    filters={
-        "custom_do_not_show_in_pos": 0,
-        "disabled": 0,
-        "variant_of": ""  # only items that are NOT variants
-    },
-    fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
-)
-    # exclude items whose item_group has do_not_show_in_pos
-    if hidden_groups:
-        items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
+        # Item fields - include custom_pharmacy only if it exists
+        item_fields = ["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
+        if frappe.get_meta("Item").has_field("custom_pharmacy"):
+            item_fields.append("custom_pharmacy")
 
-    # fetch item prices in one go
-    item_prices = {}
-    if user_price_list:
-        price_data = frappe.get_all(
-            "Item Price",
-            filters={"price_list": user_price_list},
-            fields=["item_code", "price_list_rate"]
-        )
-        item_prices = {p.item_code: p.price_list_rate for p in price_data}
+        # fetch all menu items visible in POS
+        item_filters = {"disabled": 0, "variant_of": ""}
+        if frappe.get_meta("Item").has_field("custom_do_not_show_in_pos"):
+            item_filters["custom_do_not_show_in_pos"] = 0
+        items = frappe.get_all("Item", filters=item_filters, fields=item_fields)
+        # exclude items whose item_group has do_not_show_in_pos
+        if hidden_groups:
+            items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
 
-    # fetch barcodes for all items (for search by scan)
-    item_codes = [i["name"] for i in items]
-    barcode_rows = frappe.get_all(
-        "Item Barcode",
-        filters={"parent": ["in", item_codes]},
-        fields=["parent", "barcode"]
-    )
-    barcodes_by_item = {}
-    for row in barcode_rows:
-        barcodes_by_item.setdefault(row["parent"], []).append(row.get("barcode") or "")
+        # fetch item prices in one go
+        item_prices = {}
+        if user_price_list:
+            price_data = frappe.get_all(
+                "Item Price",
+                filters={"price_list": user_price_list},
+                fields=["item_code", "price_list_rate"]
+            )
+            item_prices = {p.item_code: p.price_list_rate for p in price_data}
 
-    # attach price and barcodes to each item
-    for item in items:
-        item["standard_rate"] = item_prices.get(item["name"], item["standard_rate"])
-        item["barcodes"] = barcodes_by_item.get(item["name"], [])
+        # fetch barcodes for all items (for search by scan)
+        item_codes = [i["name"] for i in items]
+        barcode_rows = frappe.get_all(
+            "Item Barcode",
+            filters={"parent": ["in", item_codes]},
+            fields=["parent", "barcode"]
+        ) if item_codes else []
+        barcodes_by_item = {}
+        for row in barcode_rows:
+            barcodes_by_item.setdefault(row["parent"], []).append(row.get("barcode") or "")
 
-    return items
+        # attach price and barcodes to each item
+        for item in items:
+            item["standard_rate"] = item_prices.get(item["name"], item.get("standard_rate"))
+            item["barcodes"] = barcodes_by_item.get(item["name"], [])
+
+        return items
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_menu_items_with_user_prices")
+        frappe.throw(_("Failed to load menu items: {0}").format(str(e)))
 
 
 @frappe.whitelist()

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
 import { useCartStore } from "@/stores/useCartStore";
 import { useMenuStore } from "@/stores/useMenuStore";
-import { negativeStock } from "@/lib/utils";
+import { negativeStock, getPharmacyUserSettings } from "@/lib/utils";
 import {
   useCustomers,
   useTransactionTypes,
@@ -19,7 +19,12 @@ export function MenuProvider({ children }) {
   const [target, setTarget] = useState("menu");
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [allowNegativeStock, setAllowNegativeStock] = useState(null);
+  const [pharmacySettings, setPharmacySettings] = useState({ pharmacy_activated: false, is_cashier_only: false });
   const { menuItems, fetchMenuItems, menuCategories, fetchMenuCategories } = useMenuStore();
+
+  useEffect(() => {
+    getPharmacyUserSettings().then(setPharmacySettings);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,10 +101,12 @@ export function MenuProvider({ children }) {
     setTransactionType
   );
 
+  const hidePharmacyForCashier = pharmacySettings.pharmacy_activated && pharmacySettings.is_cashier_only;
   const filteredItems = useFilteredMenuItems(
     menuItems,
     searchTerm,
-    selectedCategoryId
+    selectedCategoryId,
+    hidePharmacyForCashier
   );
 
 
@@ -154,6 +161,7 @@ export function MenuProvider({ children }) {
         setSelectedAgent,
         menuGridRef,
         allowNegativeStock,
+        pharmacySettings,
       }}
     >
       {children}

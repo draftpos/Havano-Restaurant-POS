@@ -37,17 +37,11 @@ const getNavLinks = async () => {
 			name: "OPTIONS",
 			path: "",
 			active: true,
-			  dropdown: [
-				{
-				name: "Reprint Invoice",
-				action: () => setReprintDialogOpen(true),
-				},
-				{
-				name: "Credit Note",
-				action: () => console.log("Credit Note clicked"),
-				},
+			dropdown: [
+				{ name: "Reprint", action: "reprint" },
+				{ name: "Make Payment", action: "payment" },
+				{ name: "Credit Note", action: "credit_note" },
 			],
-
 		},
 		{
 			name: "Login/Logout",

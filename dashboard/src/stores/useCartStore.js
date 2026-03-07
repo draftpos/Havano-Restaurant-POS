@@ -74,6 +74,9 @@ export const useCartStore = create((set) => ({
             quantity: item.quantity ?? 1,
             price: resolvedPrice,
             standard_rate: item.standard_rate ?? resolvedPrice,
+            remark: item.remark ?? "",
+            preparation_remark: item.preparation_remark ?? null,
+            preparation_remark_free: item.preparation_remark_free ?? "",
           },
         ],
       };
@@ -113,7 +116,7 @@ export const useCartStore = create((set) => ({
       };
     }),
 
-  clearCart: () => set({ cart: [] }),
+  clearCart: () => set({ cart: [], activeQuotationId: null, activeQuotationEditMode: false }),
 
   loadCartFromOrder: async (order_id) => {
     const order = await db.getDoc("HA Order", order_id, {
@@ -139,7 +142,8 @@ export const useCartStore = create((set) => ({
     });
   },
 
-  loadCartFromQuotation: async (quotation_name) => {
+  loadCartFromQuotation: async (quotation_name, options = {}) => {
+    const { edit = false } = options;
     const quotation = await db.getDoc("Quotation", quotation_name, {
       fields: [
         "name",
@@ -149,6 +153,20 @@ export const useCartStore = create((set) => ({
       ],
     });
 
+    const itemCodes = quotation.items.map((i) => i.item_code).filter(Boolean);
+    let pharmacyFlags = {};
+    if (itemCodes.length > 0) {
+      try {
+        const { call } = await import("@/lib/frappeClient");
+        const res = await call.get("havano_restaurant_pos.api.get_items_pharmacy_flags", {
+          item_codes: JSON.stringify(itemCodes),
+        });
+        pharmacyFlags = res?.message || {};
+      } catch (e) {
+        console.warn("Could not fetch pharmacy flags:", e);
+      }
+    }
+
     set({
       cart: quotation.items.map((item) => ({
         name: item.item_code,
@@ -156,15 +174,21 @@ export const useCartStore = create((set) => ({
         quantity: item.qty || 1,
         price: item.rate || 0,
         standard_rate: item.rate || 0,
+        remark: item.custom_preparation_remark_free || item.custom_preparation_remark || "",
+        preparation_remark: item.custom_preparation_remark || null,
+        preparation_remark_free: item.custom_preparation_remark_free || "",
+        custom_pharmacy: pharmacyFlags[item.item_code] || false,
       })),
       customer: quotation.party_name || quotation.customer_name,
       customerName: quotation.customer_name || quotation.party_name,
       transactionType: "Quotation",
       activeQuotationId: quotation_name,
+      activeQuotationEditMode: edit,
     });
   },
 
   activeQuotationId: null,
+  activeQuotationEditMode: false,
 
   setSelectedCategory: (category) =>
     set((state) => ({

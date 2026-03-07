@@ -14,7 +14,7 @@ import { useCartStore } from "@/stores/useCartStore";
 import Keyboard from "../ui/Keyboard";
 import OnScreenKeyboard from "../ui/OnScreenKeyboard";
 import { useItemPreparationRemark } from "@/hooks";
-import { addRemark } from "@/lib/utils";
+import { addRemark, searchPreparationRemarks } from "@/lib/utils";
 
 import { useState } from "react";
 const UpdateCartDialog = () => {
@@ -26,6 +26,8 @@ const UpdateCartDialog = () => {
   const { prepRemarks: prepRemarkOptions, remarks: remarkOptions, setRemarks, isLoading: remarksLoading } = useItemPreparationRemark(selectedItem?.name);
 
   const [showRemarkSuggestions, setShowRemarkSuggestions] = useState(false);
+  const [searchableRemarks, setSearchableRemarks] = useState([]);
+  const [remarkSearchTerm, setRemarkSearchTerm] = useState("");
 
 
   const [showRemarkKeyboard, setShowRemarkKeyboard] = useState(false);
@@ -44,6 +46,8 @@ const UpdateCartDialog = () => {
       price: "",
       quantity: "",
       remark: "",
+      preparation_remark: "",
+      preparation_remark_free: "",
     },
   });
 
@@ -57,20 +61,27 @@ const UpdateCartDialog = () => {
         price: selectedItem.price ?? "",
         quantity: "",
         remark: selectedItem.remark ?? "",
+        preparation_remark: selectedItem.preparation_remark ?? "",
+        preparation_remark_free: selectedItem.preparation_remark_free ?? "",
       });
     } else {
-      reset({ price: "", quantity: "", remark: "" });
+      reset({ price: "", quantity: "", remark: "", preparation_remark: "", preparation_remark_free: "" });
     }
   }, [selectedItem, reset]);
 
-const handleConfirm = handleSubmit(async ({ price, quantity, remark, newRemark }) => {
+const handleConfirm = handleSubmit(async ({ price, quantity, remark, newRemark, preparation_remark, preparation_remark_free }) => {
   if (!selectedItem?.name) return;
+
+  const freeHand = preparation_remark_free || newRemark || "";
+  const displayRemark = freeHand || remark || "";
 
   updateCartItem({
     ...selectedItem,
     price: Number(price),
     quantity: Number(quantity),
-    remark,
+    remark: displayRemark,
+    preparation_remark: freeHand ? null : (preparation_remark || null),
+    preparation_remark_free: freeHand || "",
   });
 
   // If new remark exists
@@ -229,42 +240,73 @@ const handleConfirm = handleSubmit(async ({ price, quantity, remark, newRemark }
     <Input
       {...register("remark")}
       value={remarkValue || ""}
-      onChange={(e) => setValue("remark", e.target.value)}
+      onChange={async (e) => {
+        const v = e.target.value;
+        setValue("remark", v);
+        setRemarkSearchTerm(v);
+        if (v.length >= 1) {
+          const results = await searchPreparationRemarks(v);
+          setSearchableRemarks(Array.isArray(results) ? results : []);
+        }
+      }}
       onFocus={() => setShowRemarkSuggestions(true)}
       onBlur={() => setTimeout(() => setShowRemarkSuggestions(false), 150)}
-      placeholder="Select or type a preparation remark..."
+      placeholder="Search by code or description..."
       className="w-full pr-10"
     />
 
-    {/* Dropdown Arrow */}
+    {/* Dropdown Arrow - load searchable remarks on click */}
     <button
       type="button"
       className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded"
-      onMouseDown={(e) => {
-        e.preventDefault(); // prevent losing focus
+      onMouseDown={async (e) => {
+        e.preventDefault();
         setShowRemarkSuggestions(true);
-        setRemarks([...prepRemarkOptions]); // clear old first, load fresh
+        const results = await searchPreparationRemarks(remarkSearchTerm || "");
+        setSearchableRemarks(Array.isArray(results) ? results : []);
       }}
     >
       ▼
     </button>
 
-    {/* Suggestions Box */}
-    {showRemarkSuggestions && Array.isArray(remarkOptions) && remarkOptions.length > 0 && (
+    {/* Suggestions Box - search by remark_code or description */}
+    {showRemarkSuggestions && (
       <div className="absolute z-50 mt-1 w-full bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-        {remarkOptions.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onMouseDown={() => {
-              setValue("remark", item, { shouldDirty: true });
-              setShowRemarkSuggestions(false);
-            }}
-            className="block w-full text-left px-3 py-2 hover:bg-gray-100"
-          >
-            {item}
-          </button>
-        ))}
+        {searchableRemarks.length > 0 ? (
+          searchableRemarks.map((r) => {
+            const displayText = r.description || r.remark_code || r.name;
+            const selectVal = r.description || r.name;
+            return (
+              <button
+                key={r.name}
+                type="button"
+                onMouseDown={() => {
+                  setValue("remark", displayText, { shouldDirty: true });
+                  setValue("preparation_remark", r.name, { shouldDirty: true });
+                  setValue("preparation_remark_free", "", { shouldDirty: true });
+                  setShowRemarkSuggestions(false);
+                }}
+                className="block w-full text-left px-3 py-2 hover:bg-gray-100"
+              >
+                {r.remark_code ? `[${r.remark_code}] ` : ""}{displayText}
+              </button>
+            );
+          })
+        ) : (
+          Array.isArray(remarkOptions) && remarkOptions.length > 0 && remarkOptions.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onMouseDown={() => {
+                setValue("remark", item, { shouldDirty: true });
+                setShowRemarkSuggestions(false);
+              }}
+              className="block w-full text-left px-3 py-2 hover:bg-gray-100"
+            >
+              {item}
+            </button>
+          ))
+        )}
       </div>
     )}
   </div>

@@ -398,19 +398,65 @@ export async function isRoomDirectBookingsEnabled() {
  * Get hide-select settings from HA POS Settings.
  * @returns {Promise<{hide_room_select: boolean, hide_agent_select: boolean, hide_customer_select: boolean, hide_mix: boolean}>}
  */
+export async function getPharmacyUserSettings() {
+  try {
+    const { message } = await call.get("havano_restaurant_pos.api.get_pharmacy_user_settings");
+    return message || { pharmacy_activated: false, is_pharmacist: false, is_cashier_only: false };
+  } catch (err) {
+    console.error("Error fetching pharmacy user settings:", err);
+    return { pharmacy_activated: false, is_pharmacist: false, is_cashier_only: false };
+  }
+}
+
+export async function getItemsPharmacyFlags(itemCodes) {
+  try {
+    const { message } = await call.get("havano_restaurant_pos.api.get_items_pharmacy_flags", {
+      item_codes: JSON.stringify(itemCodes),
+    });
+    return message || {};
+  } catch (err) {
+    console.error("Error fetching items pharmacy flags:", err);
+    return {};
+  }
+}
+
+export async function searchPreparationRemarks(searchTerm = "") {
+  try {
+    const { message } = await call.get("havano_restaurant_pos.api.search_preparation_remarks", {
+      search_term: searchTerm,
+    });
+    return message?.remarks || [];
+  } catch (err) {
+    console.error("Error searching preparation remarks:", err);
+    return [];
+  }
+}
+
+export function getPharmacyDispenseTxtUrl(quoteId) {
+  return `/api/method/havano_restaurant_pos.api.download_pharmacy_quote_txt?quote_id=${encodeURIComponent(quoteId)}`;
+}
+
 export async function getHideSelectSettings() {
   try {
-    const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+    const [settingsResponse, pharmacySettings] = await Promise.all([
+      call.get("havano_restaurant_pos.api.get_ha_pos_settings"),
+      getPharmacyUserSettings(),
+    ]);
     const doc = settingsResponse?.message?.data;
     if (!doc) {
       return { hide_room_select: false, hide_agent_select: false, hide_customer_select: false, hide_mix: false };
     }
     const toBool = (v) => Boolean(v && (v === 1 || v === "1" || v === true));
+    let hide_mix = toBool(doc.hide_mix);
+    // Pharmacy: hide mix for cashier_only (mix only for pharmacist)
+    if (pharmacySettings.pharmacy_activated && pharmacySettings.is_cashier_only) {
+      hide_mix = true;
+    }
     return {
       hide_room_select: toBool(doc.hide_room_select),
       hide_agent_select: toBool(doc.hide_agent_select),
       hide_customer_select: toBool(doc.hide_customer_select),
-      hide_mix: toBool(doc.hide_mix),
+      hide_mix,
     };
   } catch (err) {
     console.error("Error fetching hide select settings:", err);
@@ -689,6 +735,27 @@ export async function convertQuotationToSalesInvoice(quotationName) {
  * @param {string} waiter - Waiter ID (optional)
  * @param {string} customerName - Customer display name (optional)
  */
+/**
+ * Update an existing Quotation with cart items. Does not convert to Sales Invoice.
+ */
+export async function updateQuotationFromCart(quotationName, items, customer, customerName = null) {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.update_quotation_from_cart",
+        {
+          quotation_name: quotationName,
+          items,
+          customer,
+          customer_name: customerName || customer,
+        }
+      );
+      return message;
+    },
+    "Update Quotation from Cart"
+  );
+}
+
 export async function convertQuotationToSalesInvoiceFromCart(quotationName, items, customer, orderType, table, waiter, customerName) {
   return attemptWithRetries(
     async () => {

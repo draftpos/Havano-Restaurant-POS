@@ -11,8 +11,10 @@ import {
   createTransaction, 
   getDefaultCustomer, 
   convertQuotationToSalesInvoiceFromCart,
+  updateQuotationFromCart,
   generate_quotation_json,
-  handleCreateOrder
+  handleCreateOrder,
+  getPharmacyUserSettings,
 } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
@@ -30,7 +32,7 @@ import UpdateCartDialog from "./UpdateCartDialog";
 import PaymentDialog from "./PaymentDialog";
 
 const Cart = () => {
-  const { target, currentIndex, setTarget, selectedAgent } = useMenuContext();
+  const { target, currentIndex, setTarget, selectedAgent, pharmacySettings } = useMenuContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const fetchOrders = useOrderStore((state) => state.fetchOrders);
@@ -47,6 +49,7 @@ const Cart = () => {
     transactionType,
     customer,
     activeQuotationId,
+    activeQuotationEditMode,
     clearCart,
   } = useCartStore();
 
@@ -94,6 +97,20 @@ const Cart = () => {
         return;
       }
 
+      // Pharmacy: block if pharmacy items in cart lack preparation remark (dosage)
+      if (pharmacySettings.pharmacy_activated && pharmacySettings.is_pharmacist) {
+        const pharmacyItemsWithoutDosage = cart.filter(
+          (item) => item.custom_pharmacy && !(item.remark || item.preparation_remark || item.preparation_remark_free)
+        );
+        if (pharmacyItemsWithoutDosage.length > 0) {
+          toast.error("Add Dosage Required", {
+            description: `Please add Preparation Remark (Dosage) for: ${pharmacyItemsWithoutDosage.map((i) => i.item_name || i.name).join(", ")}`,
+            duration: 6000,
+          });
+          return;
+        }
+      }
+
       setIsSubmitting(true);
       try {
         // Convert cart items to the format expected by API
@@ -101,92 +118,94 @@ const Cart = () => {
           item_code: item.name || item.item_name,
           qty: item.quantity || 1,
           rate: item.price || item.standard_rate || 0,
+          preparation_remark: item.preparation_remark || null,
+          preparation_remark_free: item.preparation_remark_free || item.remark || "",
         }));
 
-        // If activeQuotationId exists, update quotation and convert to sales invoice
+        // If activeQuotationId exists
         if (activeQuotationId) {
-          const result = await convertQuotationToSalesInvoiceFromCart(
-            activeQuotationId,
-            items,
-            customer,
-            orderType || "Take Away",
-            activeTableId || null,
-            activeWaiterId || null,
-            customerName || customer
-          );
-          
-          if (result && result.success !== false && result.sales_invoice) { 
-            console.log("🔵 Quotation converted to Sales Invoice:", result.sales_invoice);
-            setPaymentState({
-              open: true,
-              orderId: null,
-              items: cart,
-              payload: null,
-              isExistingTransaction: true,
-              transactionDoctype: "Sales Invoice",
-              transactionName: result.sales_invoice,
-            });
+          if (activeQuotationEditMode) {
+            // Edit mode: update quotation only (Dispense flow)
+            const result = await updateQuotationFromCart(
+              activeQuotationId,
+              items,
+              customer,
+              customerName || customer
+            );
+            if (result && result.success !== false) {
+              toast.success("Quotation updated successfully", {
+                description: `Quotation ID: ${activeQuotationId}`,
+                duration: 4000,
+              });
+              clearCart();
+              window.location.href = "/dashboard/transaction";
+            } else {
+              toast.error("Failed to update quotation", {
+                description: result?.message || result?.details || "Please try again later.",
+                duration: 5000,
+              });
+            }
           } else {
-            // Log the full result for debugging
-            console.error("Convert quotation failed:", result);
-            
-            // Build a comprehensive error message
-            let errorMessage = result?.message || "Failed to convert quotation";
-            if (result?.details) {
-              errorMessage += `: ${result.details}`;
+            // Convert mode: update quotation and convert to sales invoice
+            const result = await convertQuotationToSalesInvoiceFromCart(
+              activeQuotationId,
+              items,
+              customer,
+              orderType || "Take Away",
+              activeTableId || null,
+              activeWaiterId || null,
+              customerName || customer
+            );
+            if (result && result.success !== false && result.sales_invoice) {
+              console.log("🔵 Quotation converted to Sales Invoice:", result.sales_invoice);
+              setPaymentState({
+                open: true,
+                orderId: null,
+                items: cart,
+                payload: null,
+                isExistingTransaction: true,
+                transactionDoctype: "Sales Invoice",
+                transactionName: result.sales_invoice,
+              });
+            } else {
+              console.error("Convert quotation failed:", result);
+              let errorMessage = result?.message || "Failed to convert quotation";
+              if (result?.details) errorMessage += `: ${result.details}`;
+              if (result?.error_type) errorMessage += ` (${result.error_type})`;
+              toast.error("Failed to convert quotation", {
+                description: errorMessage,
+                duration: 8000,
+              });
             }
-            if (result?.error_type) {
-              errorMessage += ` (${result.error_type})`;
-            }
-            
-            toast.error("Failed to convert quotation", {
-              description: errorMessage,
-              duration: 8000, // Longer duration to read the error
-            });
           }
         } else {
           // Create new quotation
-          const result = await createTransaction("Quotation", customer, items);
+          const result = await createTransaction("Quotation", customer, items, null, orderType || "Take Away", activeTableId, activeWaiterId, customerName || customer, selectedAgent);
           
           if (result && result.success !== false && result.name) {
-            console.log("QUote created here bro" + result.name);
-             try {
-                  const res = await generate_quotation_json(result.name);
-                  console.log("Quote JSON returned from backend:", res);
-            
-                  // Convert JSON to string
-                  const jsonStr = JSON.stringify(res, null, 2); // pretty-print with 2 spaces
-            
-                  // Create a blob
-                  const blob = new Blob([jsonStr], { type: "text/plain" });
-            
-                  // Create a download link
-                  const link = document.createElement("a");
-                  link.href = URL.createObjectURL(blob);
-                  link.download = `${result.name}.txt`; // name the file as invoice name
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                } catch (error) {
-                  console.error("Error fetching invoice JSON:", error);
-                }
-
+            console.log("Quote created:", result.name);
+            try {
+              const res = await generate_quotation_json(result.name);
+              const jsonStr = JSON.stringify(res, null, 2);
+              const blob = new Blob([jsonStr], { type: "text/plain" });
+              const link = document.createElement("a");
+              link.href = URL.createObjectURL(blob);
+              link.download = `${result.name}.txt`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            } catch (error) {
+              console.error("Error fetching invoice JSON:", error);
+            }
             toast.success("Quotation created successfully", {
               description: `Quotation ID: ${result.name}`,
               duration: 4000,
             });
-            
+
             clearCart();
-            
-            // Refresh orders if needed
-            try {
-              await fetchOrders();
-              if (activeTableId) {
-                await fetchTableOrders(activeTableId);
-              }
-            } catch (refreshErr) {
-              console.error("Failed to refresh orders:", refreshErr);
-            }
+
+            // Navigate to transaction list (pharmacist flow) - use full path to avoid Promise/React Router issues
+            window.location.href = "/dashboard/transaction";
           } else {
             toast.error("Failed to create quotation", {
               description: result?.message || result?.details || "Please try again later.",
@@ -419,14 +438,21 @@ const Cart = () => {
                      </div>
 
                      <div className="flex shrink-0">
-                       <Trash2
-                         onClick={() => removeFromCart(item)}
-                         className="cursor-pointer text-red-600"
-                       />
-                       <Edit
-                         onClick={() => openUpdateDialog(item)}
-                         className="cursor-pointer text-yellow-600 ml-2"
-                       />
+                       {(!pharmacySettings?.is_cashier_only || !item.custom_pharmacy) && (
+                         <>
+                           <Trash2
+                             onClick={() => removeFromCart(item)}
+                             className="cursor-pointer text-red-600"
+                           />
+                           <Edit
+                             onClick={() => openUpdateDialog(item)}
+                             className="cursor-pointer text-yellow-600 ml-2"
+                           />
+                         </>
+                       )}
+                       {pharmacySettings?.is_cashier_only && item.custom_pharmacy && (
+                         <span className="text-xs text-gray-500 ml-1">(pharmacy)</span>
+                       )}
                      </div>
                    </div>
                  );
@@ -443,6 +469,7 @@ const Cart = () => {
         <hr className="border border-gray-600" />
         <CardFooter className="py-2 px-3">
           <Button
+            type="button"
             onClick={() => handleSubmitOrder(cart)}
             size="lg"
             className="w-full"
@@ -450,7 +477,9 @@ const Cart = () => {
             title={cart.length === 0 ? "Add items to your cart first" : ""}
           >
             {transactionType === "Quotation" 
-              ? (activeQuotationId ? "Convert to Sales Invoice" : "Create Quotation (F10)")
+              ? (activeQuotationId 
+                  ? (activeQuotationEditMode ? "Dispense (F10)" : "Convert to Sales Invoice")
+                  : (pharmacySettings.is_pharmacist && pharmacySettings.pharmacy_activated ? "Dispense (F10)" : "Create Quotation (F10)"))
               : (activeOrderId ? "Update Order" : "Place Order (F10)")
             }
           </Button>

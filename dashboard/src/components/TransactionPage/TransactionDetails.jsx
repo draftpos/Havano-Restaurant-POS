@@ -17,12 +17,15 @@ const TransactionDetails = () => {
   const { selectedTransaction, transactionItems, loadingItems, selectedCategory } = useTransactionStore();
   const { loadCartFromQuotation, clearCart } = useCartStore();
 
-  const handleEdit = () => {
-    if (selectedTransaction) {
-      const name = selectedTransaction.name;
-      // Open Quotation form in new tab
-      const url = `/app/quotation/${encodeURIComponent(name)}`;
-      window.open(url, '_blank');
+  const handleEdit = async () => {
+    if (!selectedTransaction) return;
+    try {
+      clearCart();
+      await loadCartFromQuotation(selectedTransaction.name, { edit: true });
+      navigate("/menu");
+    } catch (error) {
+      console.error("Error loading quotation to menu:", error);
+      alert("Failed to load quotation to menu page");
     }
   };
 
@@ -32,11 +35,8 @@ const TransactionDetails = () => {
     }
 
     try {
-      // Clear cart and load quotation items
       clearCart();
-      await loadCartFromQuotation(selectedTransaction.name);
-      
-      // Navigate to menu page
+      await loadCartFromQuotation(selectedTransaction.name, { edit: false });
       navigate("/menu");
     } catch (error) {
       console.error("Error loading quotation to menu:", error);

@@ -18,7 +18,9 @@
   "column_break_trdm",
   "price_list",
   "allowed_credit_note",
-  "allowed_reprint_invoice"
+  "allowed_reprint_invoice",
+  "is_pharmacist",
+  "is_cashier_only"
  ],
  "fields": [
   {
@@ -102,6 +104,18 @@
    "fieldname": "allowed_reprint_invoice",
    "fieldtype": "Check",
    "label": "Allowed Reprint Invoice"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_pharmacist",
+   "fieldtype": "Check",
+   "label": "Is Pharmacist"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_cashier_only",
+   "fieldtype": "Check",
+   "label": "Is Cashier Only"
   }
  ],
  "grid_page_length": 50,

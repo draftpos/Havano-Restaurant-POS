@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import ShiftDialog from "@/components/ui/ShiftDialog";
 import ReprintDialog from "@/components/ui/ReprintDialog";
 import CreditNoteDialog from "@/components/ui/CreditNoteDialog";
+import MakePaymentDialog from "@/components/ui/MakePaymentDialog";
 
 import Container from "@/components/Shared/Container";
 import getNavLinks from "@/navLinks";
@@ -60,6 +61,7 @@ const Footer = () => {
   const { startNewTakeAwayOrder } = useCartStore();
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -72,10 +74,11 @@ const Footer = () => {
   }, []);
 
   const handleNavClick = (e, link) => {
-    if (link.path === "/menu") {
+    const path = typeof link.path === "string" ? link.path : "/";
+    if (path === "/menu") {
       e.preventDefault();
       startNewTakeAwayOrder();
-      navigate(link.path);
+      navigate(path);
     }
   };
 
@@ -95,8 +98,9 @@ const Footer = () => {
   };
 
   const handleDropdownItemClick = (item) => {
-    if (item.name === "Reprint Invoice") setReprintDialogOpen(true);
-    else if (item.name === "Credit Note") setCreditNoteDialogOpen(true);
+    if (item.action === "reprint" || item.name === "Reprint") setReprintDialogOpen(true);
+    else if (item.action === "payment" || item.name === "Make Payment") setPaymentDialogOpen(true);
+    else if (item.action === "credit_note" || item.name === "Credit Note") setCreditNoteDialogOpen(true);
     else if (item.action) item.action();
   };
 
@@ -191,7 +195,7 @@ const Footer = () => {
               return (
                 <NavLink
                   key={link.name}
-                  to={link.path}
+                  to={typeof link.path === "string" ? link.path : "/"}
                   end
                   onClick={(e) => handleNavClick(e, link)}
                   className={({ isActive }) =>
@@ -226,8 +230,11 @@ const Footer = () => {
         onOpenChange={setCreditNoteDialogOpen}
         onSelectInvoice={(invoiceJson) => {
           console.log("Credit Note selected invoice:", invoiceJson);
-          // handle credit note logic here
         }}
+      />
+      <MakePaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { get_invoice_json } from "@/lib/utils";
+import { get_invoice_json, getPharmacyDispenseTxtUrl } from "@/lib/utils";
 
 const ReprintDialog = ({ open, onOpenChange, onReprint }) => {
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -24,44 +24,50 @@ const ReprintDialog = ({ open, onOpenChange, onReprint }) => {
 
   if (!open) return null;
   const handleReprint = async () => {
-  if (!invoiceNumber.trim()) {
-    alert("Please enter an invoice number");
-    return;
-  }
-
-  try {
-
-    // const settingsRes = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
-    // const canPrint = Boolean(settingsRes?.message?.data?.can_print_invoice);
-
-    // if (!canPrint) {
-    //   alert("Printing is disabled in POS settings");
-    //   return;
-    // }
-
-    // Directly call your whitelisted function
-    const json = await get_invoice_json(invoiceNumber);
-
-    if (json) {
-      const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `${invoiceNumber}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+    if (!invoiceNumber.trim()) {
+      alert("Please enter an invoice or quote number");
+      return;
     }
 
-    typeof onReprint === "function" && onReprint(invoiceNumber);
-    setInvoiceNumber("");
-    onOpenChange(false);
-  } catch (err) {
-    console.error("Error triggering invoice download:", err);
-    // alert(`Invoice ${invoiceNumber} does not exist or could not be retrieved.`);
-  }
-};
+    const docId = invoiceNumber.trim();
+
+    try {
+      // Try as Sales Invoice first
+      try {
+        const json = await get_invoice_json(docId);
+        if (json) {
+          const blob = new Blob([JSON.stringify(json)], { type: "application/json" });
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = `${docId}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+          typeof onReprint === "function" && onReprint(docId);
+          setInvoiceNumber("");
+          onOpenChange(false);
+          return;
+        }
+      } catch (invErr) {
+        // Not a Sales Invoice - try as Quotation (pharmacy dispense)
+      }
+
+      // Try as Quotation - pharmacy dispense text file
+      try {
+        window.open(getPharmacyDispenseTxtUrl(docId), "_blank");
+        typeof onReprint === "function" && onReprint(docId);
+        setInvoiceNumber("");
+        onOpenChange(false);
+      } catch (quoteErr) {
+        throw new Error("Document not found. Enter a valid Sales Invoice or Quotation number.");
+      }
+    } catch (err) {
+      console.error("Error triggering reprint:", err);
+      alert(err?.message || "Could not retrieve document. Please check the number.");
+    }
+  };
 
 
   const handleCancel = () => {

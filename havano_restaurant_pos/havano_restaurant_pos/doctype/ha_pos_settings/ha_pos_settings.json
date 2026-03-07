@@ -9,6 +9,7 @@
   "default_customer",
   "restaurant_mode",
   "allow_negative_stock",
+  "pharmacy_activated",
   "enable_room_direct_bookings",
   "hide_room_select",
   "hide_agent_select",
@@ -91,6 +92,12 @@
    "fieldname": "allow_negative_stock",
    "fieldtype": "Check",
    "label": "Allow Negative Stock"
+  },
+  {
+   "default": "0",
+   "fieldname": "pharmacy_activated",
+   "fieldtype": "Check",
+   "label": "Pharmacy Activated"
   },
   {
    "default": "0",

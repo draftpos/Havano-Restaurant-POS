@@ -15,10 +15,15 @@ function matchesSearch(item, term) {
 	return matchesName || matchesBarcode;
 }
 
-export function filterMenuItemsByTerm(menuItems, searchTerm, selectedCategoryId) {
+export function filterMenuItemsByTerm(menuItems, searchTerm, selectedCategoryId, hidePharmacyItems = false) {
 	const term = (searchTerm || "").trim().toLowerCase();
 
-	const initialFilteredItems = menuItems.filter((item) => {
+	let items = menuItems;
+	if (hidePharmacyItems) {
+		items = menuItems.filter((item) => !item.custom_pharmacy);
+	}
+
+	const initialFilteredItems = items.filter((item) => {
 		const matchesCategory =
 			!selectedCategoryId ||
 			selectedCategoryId === "all" ||
@@ -28,15 +33,15 @@ export function filterMenuItemsByTerm(menuItems, searchTerm, selectedCategoryId)
 	});
 
 	if (initialFilteredItems.length === 0) {
-		return menuItems.filter((item) => matchesSearch(item, term));
+		return items.filter((item) => matchesSearch(item, term));
 	}
 
 	return initialFilteredItems;
 }
 
-export default function useFilteredMenuItems(menuItems, searchTerm, selectedCategoryId) {
+export default function useFilteredMenuItems(menuItems, searchTerm, selectedCategoryId, hidePharmacyItems = false) {
 	return useMemo(
-		() => filterMenuItemsByTerm(menuItems, searchTerm, selectedCategoryId),
-		[menuItems, searchTerm, selectedCategoryId]
+		() => filterMenuItemsByTerm(menuItems, searchTerm, selectedCategoryId, hidePharmacyItems),
+		[menuItems, searchTerm, selectedCategoryId, hidePharmacyItems]
 	);
 }

@@ -5,15 +5,30 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "remark"
+  "remark_code",
+  "description",
+  "strength"
  ],
  "fields": [
   {
-   "fieldname": "remark",
-   "fieldtype": "Small Text",
+   "fieldname": "remark_code",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Remark",
+   "label": "Remark Code",
    "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "strength",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Strength"
   }
  ],
  "grid_page_length": 50,

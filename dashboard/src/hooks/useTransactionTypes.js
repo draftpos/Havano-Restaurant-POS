@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getUserTransactionTypes } from "@/lib/utils";
+import { getUserTransactionTypes, getPharmacyUserSettings } from "@/lib/utils";
 
 export default function useTransactionTypes(currentType, setTransactionType) {
 	const [availableTypes, setAvailableTypes] = useState(["Sales Invoice", "Quotation"]);
@@ -7,11 +7,21 @@ export default function useTransactionTypes(currentType, setTransactionType) {
 	useEffect(() => {
 		const fetchTypes = async () => {
 			try {
-				const { types, defaultType } = await getUserTransactionTypes();
+				const [txTypes, pharmacySettings] = await Promise.all([
+					getUserTransactionTypes(),
+					getPharmacyUserSettings(),
+				]);
+				const { types, defaultType } = txTypes;
 				setAvailableTypes(types);
 
-				if (defaultType && (!currentType || !types.includes(currentType))) {
-					setTransactionType(defaultType);
+				// Pharmacist with pharmacy activated: default to Quotation (retail POS)
+				let effectiveDefault = defaultType;
+				if (pharmacySettings.pharmacy_activated && pharmacySettings.is_pharmacist && types.includes("Quotation")) {
+					effectiveDefault = "Quotation";
+				}
+
+				if (effectiveDefault && (!currentType || !types.includes(currentType))) {
+					setTransactionType(effectiveDefault);
 				}
 			} catch (err) {
 				console.error("Error loading transaction types:", err);

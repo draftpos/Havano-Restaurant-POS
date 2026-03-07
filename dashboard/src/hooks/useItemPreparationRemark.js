@@ -25,8 +25,9 @@ export default function useItemPreparationRemark(item) {
         if (!isMounted) return;
 
         if (res?.success) {
-          setRemarks(res.remarks || []);
-          setPrepRemarks(res.prep_remarks || []);
+          const preps = res.prep_remarks || res.remarks || [];
+          setRemarks(preps);
+          setPrepRemarks(preps);
         } else {
           setRemarks([]);
           setPrepRemarks([]);

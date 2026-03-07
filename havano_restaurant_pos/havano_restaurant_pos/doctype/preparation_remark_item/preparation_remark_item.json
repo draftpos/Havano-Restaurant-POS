@@ -7,7 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "preparation_remark",
-  "remark"
+  "description"
  ],
  "fields": [
   {
@@ -19,12 +19,12 @@
    "reqd": 1
   },
   {
-   "fetch_from": "preparation_remark.remark",
+   "fetch_from": "preparation_remark.description",
    "fetch_if_empty": 1,
-   "fieldname": "remark",
-   "fieldtype": "Small Text",
+   "fieldname": "description",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Remark"
+   "label": "Description"
   }
  ],
  "grid_page_length": 50,
