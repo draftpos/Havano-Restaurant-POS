@@ -5859,23 +5859,6 @@ def sync_cloud_settings():
                         frappe.db.commit()
                     except Exception as e:
                         frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
-
-                                # Check if Cost Center already exists
-                if not frappe.db.exists("Cost Center Details", {"cost_center": f"{child_cost_center_name} - {company_abbr}"}):
-                    # Create new Cost Center Details
-                    cc_doc = frappe.get_doc({
-                        "doctype": "Cost Center Details",
-                        "company_name": company_name,
-                        "cost_center": f"{child_cost_center_name} - {company_abbr}",
-                        "email": row.get("email"),
-                        "address_line_1": row.get("address_line_1"),
-                        "address_line_2": row.get("address_line_2"),
-                        "phone": row.get("phone")
-                    })
-                    cc_doc.insert()
-                    frappe.db.commit()  # commit if you want it saved immediately
-                else:
-                    # Exists, do nothing
                     pass
                 # Append row
                 local_settings.append("user_mapping", {
