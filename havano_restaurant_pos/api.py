@@ -5793,31 +5793,43 @@ def sync_cloud_settings():
                 user_email = row.get("user")
                 company_name = row.get("company")
                 cost_center_name = row.get("cost_center")
+                # Strip any trailing "-xxx" from cloud cost center name
+                child_cost_center_name = cost_center_name.rsplit("-", 1)[0].strip()
                 warehouse_name = row.get("warehouse")
 
                 # Ensure company exists
-                if company_name and not frappe.db.exists("Company", company_name):
-                    try:
-                        frappe.get_doc({
-                            "doctype": "Company",
-                            "company_name": company_name
-                        }).insert(ignore_permissions=True)
-                        frappe.db.commit()
-                    except Exception as e:
-                        frappe.log_error(f"Failed to create company {company_name}: {str(e)}", "Sync Cloud Settings")
+               # --- Ensure parent cost center exists using actual company abbreviation ---
+                if company_name:
+                    company_doc = frappe.get_doc("Company", company_name)
+                    company_abbr = company_doc.abbr  # use actual abbreviation from Company doctype
+                    parent_cost_center_name = f"{company_name} - {company_abbr}"
 
-                # Ensure cost center exists
-                if company_name and cost_center_name and not frappe.db.exists("Cost Center", cost_center_name):
-                    try:
-                        frappe.get_doc({
-                            "doctype": "Cost Center",
-                            "cost_center_name": cost_center_name,
-                            "company": company_name,
-                            "is_group": 0
-                        }).insert(ignore_permissions=True)
-                        frappe.db.commit()
-                    except Exception as e:
-                        frappe.log_error(f"Failed to create cost center {cost_center_name}: {str(e)}", "Sync Cloud Settings")
+                    if not frappe.db.exists("Cost Center", parent_cost_center_name):
+                        try:
+                            frappe.get_doc({
+                                "doctype": "Cost Center",
+                                "cost_center_name": child_cost_center_name,
+                                "company": company_name,
+                                "is_group": 1
+                            }).insert(ignore_permissions=True)
+                            frappe.db.commit()
+                        except Exception as e:
+                            frappe.log_error(f"Failed to create parent cost center {parent_cost_center_name}: {str(e)}", "Sync Cloud Settings")
+
+                # --- Ensure child cost center exists under parent ---
+                if company_name and cost_center_name:
+                    if not frappe.db.exists("Cost Center", cost_center_name):
+                        try:
+                            frappe.get_doc({
+                                "doctype": "Cost Center",
+                                "cost_center_name": child_cost_center_name,
+                                "company": company_name,
+                                "parent_cost_center": parent_cost_center_name,
+                                "is_group": 0
+                            }).insert(ignore_permissions=True)
+                            frappe.db.commit()
+                        except Exception as e:
+                            frappe.log_error(f"Failed to create cost center {cost_center_name} under parent {parent_cost_center_name}: {str(e)}", "Sync Cloud Settings")
 
                 # Ensure warehouse exists
                 if warehouse_name and company_name and not frappe.db.exists("Warehouse", warehouse_name):
@@ -5848,12 +5860,29 @@ def sync_cloud_settings():
                     except Exception as e:
                         frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
 
+                                # Check if Cost Center already exists
+                if not frappe.db.exists("Cost Center Details", {"cost_center": f"{child_cost_center_name} - {company_abbr}"}):
+                    # Create new Cost Center Details
+                    cc_doc = frappe.get_doc({
+                        "doctype": "Cost Center Details",
+                        "company_name": company_name,
+                        "cost_center": f"{child_cost_center_name} - {company_abbr}",
+                        "email": row.get("email"),
+                        "address_line_1": row.get("address_line_1"),
+                        "address_line_2": row.get("address_line_2"),
+                        "phone": row.get("phone")
+                    })
+                    cc_doc.insert()
+                    frappe.db.commit()  # commit if you want it saved immediately
+                else:
+                    # Exists, do nothing
+                    pass
                 # Append row
                 local_settings.append("user_mapping", {
                     "user": user_email,
                     "type": row.get("type"),
                     "company": company_name,
-                    "cost_center": cost_center_name,
+                    "cost_center": f"{child_cost_center_name} - {company_abbr}",
                     "warehouse": warehouse_name,
                     "price_list": row.get("price_list"),
                     "email": row.get("email"),
