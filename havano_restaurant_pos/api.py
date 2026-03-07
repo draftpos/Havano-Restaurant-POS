@@ -5714,10 +5714,13 @@ def filter_disabled_items(doctype, txt, filters, limit_start, limit_page_length,
 
 import frappe
 import requests
+import frappe
+import requests
 
 @frappe.whitelist(allow_guest=True)
 def sync_cloud_settings():
     try:
+        # --- 1️⃣ Get cloud URL ---
         cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
         if not cloud_url:
             frappe.log_error("No cloud site URL configured in Sync Settings", "Sync Cloud Settings")
@@ -5734,7 +5737,7 @@ def sync_cloud_settings():
             frappe.log_error("No data found in cloud response", "Sync Cloud Settings")
             return
 
-        # Default customer
+        # --- 2️⃣ Ensure default customer exists locally ---
         try:
             default_customer = cloud_data.get("default_customer")
             if default_customer and not frappe.db.exists("Customer", default_customer):
@@ -5749,7 +5752,7 @@ def sync_cloud_settings():
         except Exception as e:
             frappe.log_error(f"Failed to create default customer: {str(e)}", "Sync Cloud Settings")
 
-        # Local HA POS Settings
+        # --- 3️⃣ Update local HA POS Settings ---
         local_settings = frappe.get_single("HA POS Settings")
         fields_to_update = [
             "ha_on_pres_enter", "default_customer", "restaurant_mode", "allow_negative_stock",
@@ -5760,7 +5763,7 @@ def sync_cloud_settings():
             if field in cloud_data:
                 local_settings.set(field, cloud_data[field])
 
-        # Child tables (payment methods)
+        # --- 4️⃣ Child tables: selected_payment_methods ---
         if "selected_payment_methods" in cloud_data:
             local_settings.set("selected_payment_methods", [])
             for row in cloud_data["selected_payment_methods"]:
@@ -5783,11 +5786,53 @@ def sync_cloud_settings():
                     "is_credit": row.get("is_credit", 0)
                 })
 
-        # Child table: user_mapping
+        # --- 5️⃣ Child table: user_mapping (auto-create company, cost center, warehouse, user) ---
         if "user_mapping" in cloud_data:
             local_settings.set("user_mapping", [])
             for row in cloud_data["user_mapping"]:
                 user_email = row.get("user")
+                company_name = row.get("company")
+                cost_center_name = row.get("cost_center")
+                warehouse_name = row.get("warehouse")
+
+                # Ensure company exists
+                if company_name and not frappe.db.exists("Company", company_name):
+                    try:
+                        frappe.get_doc({
+                            "doctype": "Company",
+                            "company_name": company_name
+                        }).insert(ignore_permissions=True)
+                        frappe.db.commit()
+                    except Exception as e:
+                        frappe.log_error(f"Failed to create company {company_name}: {str(e)}", "Sync Cloud Settings")
+
+                # Ensure cost center exists
+                if company_name and cost_center_name and not frappe.db.exists("Cost Center", cost_center_name):
+                    try:
+                        frappe.get_doc({
+                            "doctype": "Cost Center",
+                            "cost_center_name": cost_center_name,
+                            "company": company_name,
+                            "is_group": 0
+                        }).insert(ignore_permissions=True)
+                        frappe.db.commit()
+                    except Exception as e:
+                        frappe.log_error(f"Failed to create cost center {cost_center_name}: {str(e)}", "Sync Cloud Settings")
+
+                # Ensure warehouse exists
+                if warehouse_name and company_name and not frappe.db.exists("Warehouse", warehouse_name):
+                    try:
+                        frappe.get_doc({
+                            "doctype": "Warehouse",
+                            "warehouse_name": warehouse_name,
+                            "company": company_name,
+                            "is_group": 0
+                        }).insert(ignore_permissions=True)
+                        frappe.db.commit()
+                    except Exception as e:
+                        frappe.log_error(f"Failed to create warehouse {warehouse_name}: {str(e)}", "Sync Cloud Settings")
+
+                # Ensure user exists
                 if not frappe.db.exists("User", user_email):
                     try:
                         new_user = frappe.get_doc({
@@ -5803,12 +5848,13 @@ def sync_cloud_settings():
                     except Exception as e:
                         frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
 
+                # Append row
                 local_settings.append("user_mapping", {
                     "user": user_email,
                     "type": row.get("type"),
-                    "company": row.get("company"),
-                    "cost_center": row.get("cost_center"),
-                    "warehouse": row.get("warehouse"),
+                    "company": company_name,
+                    "cost_center": cost_center_name,
+                    "warehouse": warehouse_name,
                     "price_list": row.get("price_list"),
                     "email": row.get("email"),
                     "address_line_1": row.get("address_line_1"),
@@ -5817,14 +5863,13 @@ def sync_cloud_settings():
                     "allowed_reprint_invoice": row.get("allowed_reprint_invoice")
                 })
 
+        # --- 6️⃣ Save local settings ---
         local_settings.save(ignore_permissions=True)
         frappe.db.commit()
-        print("HA POS Settings synced from cloud")  # safe log
+        print("HA POS Settings synced from cloud")  # safe console log
 
     except Exception as e:
         frappe.log_error(f"Error in sync_cloud_settings: {str(e)}", "Sync Cloud Settings")
-
-
 @frappe.whitelist()
 def user_logout_now():
     """
