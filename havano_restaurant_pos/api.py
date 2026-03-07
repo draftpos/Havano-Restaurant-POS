@@ -5714,116 +5714,115 @@ def filter_disabled_items(doctype, txt, filters, limit_start, limit_page_length,
 
 import frappe
 import requests
+
 @frappe.whitelist(allow_guest=True)
 def sync_cloud_settings():
-    # --- 1️⃣ Hardcoded cloud URL (Guest access) ---
-    cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
-    if not cloud_url:
-        frappe.msgprint("No cloud site URL configured in Sync Settings.")
-        
+    try:
+        cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
+        if not cloud_url:
+            frappe.log_error("No cloud site URL configured in Sync Settings", "Sync Cloud Settings")
+            return
 
-    # append your resource path
-    CLOUD_URL = f"{cloud_url}/api/resource/HA%20POS%20Settings/HA%20POS%20Settings"
+        CLOUD_URL = f"{cloud_url}/api/resource/HA%20POS%20Settings/HA%20POS%20Settings"
+        resp = requests.get(CLOUD_URL, timeout=10)
+        if resp.status_code != 200:
+            frappe.log_error(f"Failed to fetch cloud settings: {resp.text}", "Sync Cloud Settings")
+            return
 
-    # --- 2️⃣ Pull settings from cloud ---
-    resp = requests.get(CLOUD_URL)
-    if resp.status_code != 200:
-        frappe.msgprint(f"Failed to fetch cloud settings: {resp.text}")
-    
-    cloud_data = resp.json().get("data")
-    if not cloud_data:
-        frappe.msgprint("No data found in cloud response")
-    
-    # --- 3️⃣ Ensure default customer exists locally ---
-    default_customer = cloud_data.get("default_customer")
-    if default_customer and not frappe.db.exists("Customer", default_customer):
-        frappe.get_doc({
-            "doctype": "Customer",
-            "customer_name": default_customer,
-            "customer_type": "Individual",
-            "customer_group": "All Customer Groups",
-            "territory": "All Territories",
-        }).insert(ignore_permissions=True)
-        frappe.db.commit()
-        frappe.msgprint(f"Created default customer: {default_customer}")
-    
-    # --- 4️⃣ Update local HA POS Settings (single doc) ---
-    local_settings = frappe.get_single("HA POS Settings")
-    
-    # Main fields
-    fields_to_update = [
-        "ha_on_pres_enter", "default_customer", "restaurant_mode", "allow_negative_stock",
-        # "enable_room_direct_bookings", "hide_room_select", "hide_agent_select",
-        "hide_customer_select", "hide_mix", "default_price_list", "default_payment_method",
-        "can_print_invoice", "hide_dinetakeaway"
-    ]
-    for field in fields_to_update:
-        if field in cloud_data:
-            local_settings.set(field, cloud_data[field])
-    
-    # Child table: selected_payment_methods
-    if "selected_payment_methods" in cloud_data:
-        local_settings.set("selected_payment_methods", [])  # clear old rows
-        for row in cloud_data["selected_payment_methods"]:
-            mode_of_payment = row.get("mode_of_payment")
+        cloud_data = resp.json().get("data")
+        if not cloud_data:
+            frappe.log_error("No data found in cloud response", "Sync Cloud Settings")
+            return
 
-            # --- 1️⃣ Ensure Payment Method exists locally ---
-            if mode_of_payment and not frappe.db.exists("Mode of Payment", mode_of_payment):
+        # Default customer
+        try:
+            default_customer = cloud_data.get("default_customer")
+            if default_customer and not frappe.db.exists("Customer", default_customer):
                 frappe.get_doc({
-                    "doctype": "Mode of Payment",
-                    "mode_of_payment": mode_of_payment,
-                    # "type": "Receivable",  # default type, change if needed
-                    "enabled": 1
+                    "doctype": "Customer",
+                    "customer_name": default_customer,
+                    "customer_type": "Individual",
+                    "customer_group": "All Customer Groups",
+                    "territory": "All Territories",
                 }).insert(ignore_permissions=True)
                 frappe.db.commit()
-                frappe.msgprint(f"Created new Payment Method: {mode_of_payment}")
+        except Exception as e:
+            frappe.log_error(f"Failed to create default customer: {str(e)}", "Sync Cloud Settings")
 
-            # --- 2️⃣ Append to child table ---
-            local_settings.append("selected_payment_methods", {
-                "mode_of_payment": mode_of_payment,
-                "exchange_rate": row.get("exchange_rate", 1.0),
-                "currency": row.get("currency"),
-                "currency_symbol": row.get("currency_symbol"),
-                "is_credit": row.get("is_credit", 0)
-            })
-    # Child table: user_mapping
-    if "user_mapping" in cloud_data:
-        local_settings.set("user_mapping", [])  # clear old rows
-        for row in cloud_data["user_mapping"]:
-            user_email = row.get("user")
-            
-            # Create user if missing
-            if not frappe.db.exists("User", user_email):
-                new_user = frappe.get_doc({
-                    "doctype": "User",
-                    "email": user_email,
-                    "first_name": user_email.split("@")[0],
-                    "enabled": 1,
-                    "new_password": "changemenow123!",
-                    "roles": []  # no admin
+        # Local HA POS Settings
+        local_settings = frappe.get_single("HA POS Settings")
+        fields_to_update = [
+            "ha_on_pres_enter", "default_customer", "restaurant_mode", "allow_negative_stock",
+            "hide_customer_select", "hide_mix", "default_price_list", "default_payment_method",
+            "can_print_invoice", "hide_dinetakeaway"
+        ]
+        for field in fields_to_update:
+            if field in cloud_data:
+                local_settings.set(field, cloud_data[field])
+
+        # Child tables (payment methods)
+        if "selected_payment_methods" in cloud_data:
+            local_settings.set("selected_payment_methods", [])
+            for row in cloud_data["selected_payment_methods"]:
+                mode_of_payment = row.get("mode_of_payment")
+                if mode_of_payment and not frappe.db.exists("Mode of Payment", mode_of_payment):
+                    try:
+                        frappe.get_doc({
+                            "doctype": "Mode of Payment",
+                            "mode_of_payment": mode_of_payment,
+                            "enabled": 1
+                        }).insert(ignore_permissions=True)
+                        frappe.db.commit()
+                    except Exception as e:
+                        frappe.log_error(f"Failed to create payment method {mode_of_payment}: {str(e)}", "Sync Cloud Settings")
+                local_settings.append("selected_payment_methods", {
+                    "mode_of_payment": mode_of_payment,
+                    "exchange_rate": row.get("exchange_rate", 1.0),
+                    "currency": row.get("currency"),
+                    "currency_symbol": row.get("currency_symbol"),
+                    "is_credit": row.get("is_credit", 0)
                 })
-                new_user.insert(ignore_permissions=True)
-                frappe.db.commit()
-                frappe.msgprint(f"Created new user: {user_email} with password 'changemenow'")
-            
-            # Append row including warehouse
-            local_settings.append("user_mapping", {
-                "user": user_email,
-                "type": row.get("type"),
-                "company": row.get("company"),
-                "cost_center": row.get("cost_center"),
-                "warehouse": row.get("warehouse"),  # ✅ include warehouse
-                "price_list": row.get("price_list"),
-                "email": row.get("email"),
-                "address_line_1": row.get("address_line_1"),
-                "phone": row.get("phone"),
-                "allowed_credit_note": row.get("allowed_credit_note"),
-                "allowed_reprint_invoice": row.get("allowed_reprint_invoice")
-            })
-        # --- 5️⃣ Save and commit ---
-    local_settings.save(ignore_permissions=True)
-    frappe.db.commit()
-    frappe.msgprint("HA POS Settings synced from cloud!")
+
+        # Child table: user_mapping
+        if "user_mapping" in cloud_data:
+            local_settings.set("user_mapping", [])
+            for row in cloud_data["user_mapping"]:
+                user_email = row.get("user")
+                if not frappe.db.exists("User", user_email):
+                    try:
+                        new_user = frappe.get_doc({
+                            "doctype": "User",
+                            "email": user_email,
+                            "first_name": user_email.split("@")[0],
+                            "enabled": 1,
+                            "new_password": "changemenow123!",
+                            "roles": []
+                        })
+                        new_user.insert(ignore_permissions=True)
+                        frappe.db.commit()
+                    except Exception as e:
+                        frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
+
+                local_settings.append("user_mapping", {
+                    "user": user_email,
+                    "type": row.get("type"),
+                    "company": row.get("company"),
+                    "cost_center": row.get("cost_center"),
+                    "warehouse": row.get("warehouse"),
+                    "price_list": row.get("price_list"),
+                    "email": row.get("email"),
+                    "address_line_1": row.get("address_line_1"),
+                    "phone": row.get("phone"),
+                    "allowed_credit_note": row.get("allowed_credit_note"),
+                    "allowed_reprint_invoice": row.get("allowed_reprint_invoice")
+                })
+
+        local_settings.save(ignore_permissions=True)
+        frappe.db.commit()
+        print("HA POS Settings synced from cloud")  # safe log
+
+    except Exception as e:
+        frappe.log_error(f"Error in sync_cloud_settings: {str(e)}", "Sync Cloud Settings")
 
 
 @frappe.whitelist()
