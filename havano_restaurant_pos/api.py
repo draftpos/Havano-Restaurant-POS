@@ -5824,3 +5824,57 @@ def sync_cloud_settings():
     local_settings.save(ignore_permissions=True)
     frappe.db.commit()
     frappe.msgprint("HA POS Settings synced from cloud!")
+
+
+@frappe.whitelist()
+def user_logout_now():
+    """
+    Logs out the current Frappe user immediately.
+    Can be called from frontend via frappe.call
+    """
+    frappe.local.login_manager.logout()
+    return {"message": "Logged out successfully"}
+
+import frappe
+from frappe import _
+
+@frappe.whitelist()
+def get_last_invoice_metrics():
+    print("invoice metrices--------------------------------")
+    user = frappe.session.user
+
+    # 1️⃣ Get last Sales Invoice for this user
+    last_invoice = frappe.get_all(
+        "Sales Invoice",
+        filters={"owner": user},
+        order_by="creation desc",
+        limit=1,
+        fields=["name", "grand_total", "paid_amount", "custom_change"]
+    )
+
+    if last_invoice:
+        invoice = last_invoice[0]
+        total = invoice.get("grand_total") or 0
+        paid = (invoice.get("grand_total") + invoice.get("custom_change")) or 0
+        change = invoice.get("custom_change") or 0
+        invoice_name = invoice.get("name")
+    else:
+        invoice_name = ""
+        total = 0
+        paid = 0
+        change = 0
+
+    # 2️⃣ Count queued invoices in Sales Invoice Outbox
+    queued_count = frappe.db.count(
+        "Sales Invoice Outbox",
+        filters={"status": ["in", ["Failed", "Pending"]]}
+    )
+
+    # 3️⃣ Build response
+    return {
+        "invoice": invoice_name,
+        "total": total,
+        "paid": paid,
+        "change": change,
+        "queued": queued_count
+    }

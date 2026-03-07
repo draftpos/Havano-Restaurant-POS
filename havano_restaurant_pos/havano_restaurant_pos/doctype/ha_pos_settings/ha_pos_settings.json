@@ -19,6 +19,7 @@
   "default_payment_method",
   "can_print_invoice",
   "hide_dinetakeaway",
+  "auto_logout_user",
   "section_break_yhyv",
   "selected_payment_methods",
   "section_break_holp",
@@ -127,13 +128,19 @@
    "fieldname": "hide_dinetakeaway",
    "fieldtype": "Check",
    "label": "Hide Dine/Takeaway"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_logout_user",
+   "fieldtype": "Check",
+   "label": "Auto Logout User"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-03-06 14:52:11.607433",
+ "modified": "2026-03-06 16:20:05.543744",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA POS Settings",

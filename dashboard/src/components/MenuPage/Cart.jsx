@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast,Toaster } from "sonner";
 import { cn } from "@/lib/utils";
+import { db, call } from "@/lib/frappeClient";
 
 import { useMenuContext } from "@/contexts/MenuContext";
 
@@ -49,6 +50,40 @@ const Cart = () => {
     activeQuotationId,
     clearCart,
   } = useCartStore();
+const [previousMetrics, setPreviousMetrics] = useState({
+  invoice: "",
+  total: 0,
+  paid: 0,
+  change: 0,
+  queued: 0,
+});
+
+useEffect(() => {
+  const fetchLastInvoiceMetrics = async () => {
+    console.log("🔹 Fetching last invoice metrics..."); // start
+
+    try {
+      const settingsResponse = await call.get(
+        "havano_restaurant_pos.api.get_last_invoice_metrics"
+      );
+      console.log("🔹 Raw response from API:", settingsResponse);
+
+      const doc = settingsResponse?.message;
+      console.log("🔹 Parsed metrics:", doc);
+
+      if (doc) {
+        setPreviousMetrics(doc);
+        console.log("🔹 previousMetrics state updated:", doc);
+      } else {
+        console.warn("⚠️ No data returned from get_last_invoice_metrics");
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch last invoice metrics", err);
+    }
+  };
+
+  fetchLastInvoiceMetrics();
+}, []);
 
   useEffect(() => {
     const handleKeyBoardSubmitOrder = (event) => {
@@ -272,7 +307,40 @@ const Cart = () => {
             
             // Navigate to table details if we have a table
             if (activeTableId) {
-              navigate(`/tables/${activeTableId}`);
+              // navigate(`/tables/${activeTableId}`);
+              
+                try {
+                      const settingsResponse = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
+                      const doc = settingsResponse?.message?.data;
+
+                      if (!doc) {
+                          console.error("Failed to fetch HA POS Settings.");
+                          return;
+                      }
+
+                      // get auto_logout_user field
+                      const autoLogoutUser = doc.auto_logout_user;
+
+                      console.log("auto_logout_user:", autoLogoutUser);
+
+                      if (autoLogoutUser) {
+                          try {
+                                  window.location.href = 'dashboard/auth';
+                                  const logoutResponse = await call.get("havano_restaurant_pos.api.user_logout_now");
+                                  const msg = logoutResponse?.message?.message || "Logged out";
+                                  // redirect to login page after logout
+                               
+                              } catch (err) {
+                                  console.error("Logout Failed:", err);
+                              }                      
+                      } else {
+                        window.location.href = '/dashboard/menu';
+                        
+                      }
+
+                  } catch (err) {
+                    console.log("Error fetching HA POS Settings:", err);
+                  }
             }
           } else {
             toast.error("Failed to create order", {
@@ -372,26 +440,72 @@ const Cart = () => {
   return (
     <>
       <Card className="h-[90vh] flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex justify-between items-center">
-            <Clock />
-            {cart.length > 0 ? (
-              <h1 className="text-2xl font-bold text-primary">
-                Total: {formatCurrency(
-                  cart.reduce((total, item) => {
-                    const price = item.price ?? item.standard_rate ?? 0;
-                    const quantity = item.quantity ?? 1;
-                    return total + (price * quantity);
-                  }, 0)
-                )}
-              </h1>
-            ) : activeOrderId ? (
-              <h1 className="text-2xl font-bold text-primary">{activeOrderId}</h1>
-            ) : (
-              <h1 className="text-2xl font-bold text-primary">New Order</h1>
+       <CardHeader>
+
+    <CardTitle className="flex flex-col gap-1">
+
+      {/* POS Metrics */}
+      <div className="grid grid-cols-5 text-center text-[10px] text-gray-500">
+         <div>
+            <div>Invoice</div>
+            <div className="text-xs font-bold text-primary">
+              {previousMetrics.invoice}
+            </div>
+          </div>
+        <div>
+          <div>Total</div>
+          <div className="text-xs font-semibold text-black">
+            {formatCurrency(previousMetrics.total)}
+          </div>
+        </div>
+
+        <div>
+          <div>Paid</div>
+          <div className="text-xs font-semibold text-black">
+            {formatCurrency(previousMetrics.paid)}
+          </div>
+        </div>
+
+        <div>
+          <div>Change</div>
+          <div className="text-xs font-semibold text-black">
+            {formatCurrency(previousMetrics.change)}
+          </div>
+        </div>
+
+        <div>
+          <div>Queued</div>
+          <div className="text-xs font-semibold text-red-600">
+            {previousMetrics.queued}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Clock + Order Title */}
+      <div className="flex justify-between items-center">
+        <Clock />
+
+        {cart.length > 0 ? (
+          <h1 className="text-2xl font-bold text-primary">
+            Total: {formatCurrency(
+              cart.reduce((total, item) => {
+                const price = item.price ?? item.standard_rate ?? 0;
+                const quantity = item.quantity ?? 1;
+                return total + (price * quantity);
+              }, 0)
             )}
-          </CardTitle>
-        </CardHeader>
+          </h1>
+        ) : activeOrderId ? (
+          <h1 className="text-2xl font-bold text-primary">{activeOrderId}</h1>
+        ) : (
+          <h1 className="text-2xl font-bold text-primary">New Order</h1>
+        )}
+      </div>
+
+    </CardTitle>
+
+  </CardHeader>
         <hr className="border border-gray-600" />
         <CardContent className="flex-1 overflow-y-auto py-1 px-2">
          {
