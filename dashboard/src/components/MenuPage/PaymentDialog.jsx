@@ -337,20 +337,20 @@ if (isCreditNote) {
       }
     })();
   };
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (paymentStatus.hasDue) return;
-        handlePay();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentStatus.hasDue])
+  // useEffect(() => {
+  //   const handleKeyDown = (e) => {
+  //     if (e.key === "Enter") {
+  //       e.preventDefault();
+  //       if (paymentStatus.hasDue) return;
+  //       handlePay();
+  //     }
+  //   };
+  //   document.addEventListener("keydown", handleKeyDown);
+  //   return () => {
+  //     document.removeEventListener("keydown", handleKeyDown);
+  //   };
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [paymentStatus.hasDue])
 
   return (
     <>
