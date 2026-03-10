@@ -3165,7 +3165,7 @@ def _build_invoice_json(invoice_doc, cost_center_doc=None):
         "ReceiptNo": invoice_doc.get("custom_receiptno") or "",
         "CustomerRef": invoice_doc.get("customer_ref") or "None",
         "VCode": invoice_doc.get("custom_verification_code") or "",
-        "QRCode": invoice_doc.get("custom_invoice_qr_code") or ""
+        "QRCode": invoice_doc.get("custom_invoice_qr_code") or "",
         "DiscAmt": str(flt(invoice_doc.discount_amount)),
         "Subtotal": flt(invoice_doc.base_net_total),
         "TotalVat": str(flt(invoice_doc.total_taxes_and_charges)),
