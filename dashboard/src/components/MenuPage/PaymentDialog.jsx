@@ -143,7 +143,9 @@ export default function PaymentDialog({
     if (!canPrintInvoice || !invoiceName) return;
     try {
       const json = await get_invoice_json(invoiceName);
+      console.log("Invoice JSON data:", json);
       const data = { ...(json || {}), ReceiptType: receiptType || "" };
+      console.log("Data to be downloaded:", data);
       const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
