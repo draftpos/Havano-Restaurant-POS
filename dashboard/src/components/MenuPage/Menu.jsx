@@ -381,28 +381,28 @@ useEffect(() => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
-                // if (e.key === "Enter") {
-                //  d e.preventDefault();
-                //   e.stopPropagation();
-                //   const currentValue = (e.target.value || "").trim();
-                //   const itemsToUse = currentValue
-                //     ? filterMenuItemsByTerm(menuItems, currentValue, selectedCategoryId)
-                //     : filteredItems;
-                //   if (itemsToUse.length > 0) {
-                //     const index = Math.min(currentIndex, itemsToUse.length - 1);
-                //     const item = itemsToUse[Math.max(0, index)];
-                //     addToCart({
-                //       name: item.name,
-                //       item_name: item.item_name,
-                //       custom_menu_category: item.custom_menu_category,
-                //       quantity: 1,
-                //       price: item.standard_rate ?? item.price ?? 0,
-                //       standard_rate: item.standard_rate ?? item.price ?? 0,
-                //       remark: "",
-                //     });
-                //     if (currentValue) setSearchTerm("");
-                //   }
-                // }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const currentValue = (e.target.value || "").trim();
+                  const itemsToUse = currentValue
+                    ? filterMenuItemsByTerm(menuItems, currentValue, selectedCategoryId)
+                    : filteredItems;
+                  if (itemsToUse.length > 0) {
+                    const index = Math.min(currentIndex, itemsToUse.length - 1);
+                    const item = itemsToUse[Math.max(0, index)];
+                    addToCart({
+                      name: item.name,
+                      item_name: item.item_name,
+                      custom_menu_category: item.custom_menu_category,
+                      quantity: 1,
+                      price: item.standard_rate ?? item.price ?? 0,
+                      standard_rate: item.standard_rate ?? item.price ?? 0,
+                      remark: "",
+                    });
+                    if (currentValue) setSearchTerm("");
+                  }
+                }
               }}
               onBlur={(e) => {
                 // if (target !== "menu") return;
