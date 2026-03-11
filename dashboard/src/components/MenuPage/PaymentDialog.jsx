@@ -146,7 +146,7 @@ const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
 
   try {
     // wait for fiscalisation fields to be written
-    await delay(5000); // 5 seconds
+    await delay(2000); // 5 seconds
 
     const json = await get_invoice_json(invoiceName);
     console.log("Invoice JSON data:", json);
