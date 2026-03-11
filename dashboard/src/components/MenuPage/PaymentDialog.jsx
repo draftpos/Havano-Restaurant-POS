@@ -139,26 +139,38 @@ export default function PaymentDialog({
     }, 0);
   };
 
-  const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
-    if (!canPrintInvoice || !invoiceName) return;
-    try {
-      const json = await get_invoice_json(invoiceName);
-      console.log("Invoice JSON data:", json);
-      const data = { ...(json || {}), ReceiptType: receiptType || "" };
-      console.log("Data to be downloaded:", data);
-      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `${invoiceName}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
-    } catch (e) {
-      console.error("Invoice download failed:", e);
-    }
-  };
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
+  if (!canPrintInvoice || !invoiceName) return;
+
+  try {
+    // wait for fiscalisation fields to be written
+    await delay(5000); // 5 seconds
+
+    const json = await get_invoice_json(invoiceName);
+    console.log("Invoice JSON data:", json);
+
+    const data = { ...(json || {}), ReceiptType: receiptType || "" };
+    console.log("Data to be downloaded:", data);
+
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const blobUrl = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `${invoiceName}.txt`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+
+  } catch (e) {
+    console.error("Invoice download failed:", e);
+  }
+};
 
   // Calculate payment status
   const paymentStatus = useMemo(() => {
