@@ -44,6 +44,9 @@ export default function PaymentDialog({
   clearCreditNoteMode 
 } = useCartStore();
 
+  const [loading, setLoading] = useState(false);
+  const [zimraMessage, setZimraMessage] = useState("");
+
   // Fetch payment methods from HA POS Setting
   useEffect(() => {
     const fetchPaymentMethods = async () => {
@@ -144,15 +147,23 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
   if (!canPrintInvoice || !invoiceName) return;
 
+  const messages = [
+    "Sending invoice to ZIMRA...",
+    "Waiting for ZIMRA response...",
+    "Finalising fiscal receipt..."
+  ];
+
   try {
-    // wait for fiscalisation fields to be written
-    await delay(3000); // 5 seconds
+    setLoading(true);
+
+    for (const msg of messages) {
+      setZimraMessage(msg);
+      await delay(1000);
+    }
 
     const json = await get_invoice_json(invoiceName);
-    console.log("Invoice JSON data:", json);
 
     const data = { ...(json || {}), ReceiptType: receiptType || "" };
-    console.log("Data to be downloaded:", data);
 
     const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
     const blobUrl = URL.createObjectURL(blob);
@@ -167,11 +178,15 @@ const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
 
     setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
 
+    setZimraMessage("Fiscal receipt ready");
+
   } catch (e) {
     console.error("Invoice download failed:", e);
+    setZimraMessage("Fiscalisation failed");
+  } finally {
+    setTimeout(() => setLoading(false), 1000);
   }
 };
-
   // Calculate payment status
   const paymentStatus = useMemo(() => {
     const paid = sumPayments();
@@ -425,6 +440,25 @@ if (isCreditNote) {
         .payment-dialog-content::-webkit-scrollbar-thumb:hover {
           background: #555;
         }
+        .zimra-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+
+      .zimra-spinner {
+        width: 16px;
+        height: 16px;
+        border: 3px solid #ddd;
+        border-top: 3px solid #3498db;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
       `}</style>
       <MultiCurrencyDialog
         open={openMultiCurrencyDialog}
@@ -443,6 +477,12 @@ if (isCreditNote) {
         >
           <div className="flex flex-col h-full">
             <DialogHeader className="mb-3 flex-shrink-0">
+            {loading && (
+  <div className="zimra-status mb-3">
+    <div className="zimra-spinner"></div>
+    <span>{zimraMessage}</span>
+  </div>
+)}
               <DialogTitle className="text-lg font-semibold">
                 Make Payment
               </DialogTitle>
