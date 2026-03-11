@@ -75,7 +75,7 @@ export default function MultiCurrencyDialog({
 
   useEffect(() => {
     if (error) toast.error(error);
-    if (success) toast.success("Payment successful");
+    // if (success) toast.success("Payment successful");
   }, [error, success]);
 
   // Fetch exchange rates from selected payment methods
@@ -455,10 +455,10 @@ export default function MultiCurrencyDialog({
                           }
                           
                           // Immediately show success and close dialog (optimistic UI)
-                          toast.success("Payment processing...", {
-                            description: "Payment is being processed in the background",
-                            duration: 2000,
-                          });
+                          // toast.success("Payment processing...", {
+                          //   description: "Payment is being processed in the background",
+                          //   duration: 2000,
+                          // });
                           
                           onOpenChange(false);
                           setPaymentDialogOpenState(false);

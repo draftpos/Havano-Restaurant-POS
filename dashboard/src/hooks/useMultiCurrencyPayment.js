@@ -88,26 +88,54 @@ function useMultiCurrencyPayment() {
 			setSuccess(true);
 			if (res.sales_invoice) {
 				try {
+					const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 					const settingsRes = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
 					const canPrint = Boolean(settingsRes?.message?.data?.can_print_invoice);
+					
 					if (canPrint) {
-						const json = await get_invoice_json(res.sales_invoice);
-						const data = { ...(json || {}), ReceiptType: selectedReceipt || "" };
+					const invoiceName = res.sales_invoice;
+					const receiptType = selectedReceipt || "";
+
+					const steps = [
+						"Sending invoice to ZIMRA...",
+						"Waiting for ZIMRA response...",
+						"Finalising fiscal receipt..."
+					];
+
+					// create one toast
+					const tId = toast.loading(steps[0]);
+
+					try {
+						for (let i = 0; i < steps.length; i++) {
+						toast.loading(steps[i], { id: tId }); // update message
+						await delay(1000); // simulate waiting
+						}
+
+						const json = await get_invoice_json(invoiceName);
+						const data = { ...(json || {}), ReceiptType: receiptType };
 						const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
 						const blobUrl = URL.createObjectURL(blob);
+
 						const a = document.createElement("a");
 						a.href = blobUrl;
-						a.download = `${res.sales_invoice}.txt`;
+						a.download = `${invoiceName}.txt`;
 						document.body.appendChild(a);
 						a.click();
 						document.body.removeChild(a);
 						setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+
+						// ✅ close the loading toast
+						toast.dismiss(tId);
+					} catch (e) {
+						console.error(e);
+						toast.error("Fiscalisation failed", { id: tId });
+					}
 					}
 				} catch (err) {
 					console.error("Error triggering invoice download:", err);
 					toast.error("Invoice not found for download!");
 				}
-			}
+				}
 			return res;
 
 			

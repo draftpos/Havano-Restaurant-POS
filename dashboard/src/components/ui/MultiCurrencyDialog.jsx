@@ -77,7 +77,7 @@ export default function MultiCurrencyDialog({
 
   useEffect(() => {
     if (error) toast.error(error);
-    if (success) toast.success("Payment successful");
+    // if (success) toast.success("Payment successful");
   }, [error, success]);
   const [expectedPayments, setExpectedPayments] = useState({});
   useEffect(() => {

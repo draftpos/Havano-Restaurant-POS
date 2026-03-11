@@ -142,49 +142,48 @@ export default function PaymentDialog({
     }, 0);
   };
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+<div className="zimra-status" style={{ display: loading ? "flex" : "none" }}>
+  <div className="zimra-spinner"></div>
+  <span>{zimraMessage}</span>
+</div>
 const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
   if (!canPrintInvoice || !invoiceName) return;
 
-  const messages = [
+  const steps = [
     "Sending invoice to ZIMRA...",
     "Waiting for ZIMRA response...",
     "Finalising fiscal receipt..."
   ];
 
-  try {
-    setLoading(true);
+  // create one toast
+  const tId = toast.loading(steps[0]);
 
-    for (const msg of messages) {
-      setZimraMessage(msg);
-      await delay(1000);
+  try {
+    for (let i = 0; i < steps.length; i++) {
+      toast.loading(steps[i], { id: tId }); // update message
+      await delay(1000); // simulate waiting
     }
 
     const json = await get_invoice_json(invoiceName);
-
     const data = { ...(json || {}), ReceiptType: receiptType || "" };
-
     const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
     const blobUrl = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = blobUrl;
     a.download = `${invoiceName}.txt`;
-
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
     setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
 
-    setZimraMessage("Fiscal receipt ready");
-
+    // close the loading toast manually
+    toast.dismiss(tId); // ✅ this will close it
   } catch (e) {
-    console.error("Invoice download failed:", e);
-    setZimraMessage("Fiscalisation failed");
-  } finally {
-    setTimeout(() => setLoading(false), 1000);
+    console.error(e);
+    toast.error("Fiscalisation failed", { id: tId }); // replaces loading with error
   }
 };
   // Calculate payment status
@@ -477,12 +476,6 @@ if (isCreditNote) {
         >
           <div className="flex flex-col h-full">
             <DialogHeader className="mb-3 flex-shrink-0">
-            {loading && (
-  <div className="zimra-status mb-3">
-    <div className="zimra-spinner"></div>
-    <span>{zimraMessage}</span>
-  </div>
-)}
               <DialogTitle className="text-lg font-semibold">
                 Make Payment
               </DialogTitle>
