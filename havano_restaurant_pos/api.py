@@ -5722,7 +5722,7 @@ def sync_users_from_cloud():
             frappe.throw("Cloud site URL not configured in Sync Settings")
 
         # endpoint on cloud that returns users + roles
-        endpoint = f"{cloud_url}/api/method/your_app.api.get_all_users"
+        endpoint = f"{cloud_url}/api/method/havano_restaurant_pos.api.get_all_users"
         resp = requests.get(endpoint, timeout=10)
         resp.raise_for_status()
 
