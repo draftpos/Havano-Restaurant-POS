@@ -5711,6 +5711,61 @@ def filter_disabled_items(doctype, txt, filters, limit_start, limit_page_length,
     )
 
 
+@frappe.whitelist()
+def sync_users_from_cloud():
+    """
+    Fetch all users from the cloud endpoint and create them locally with roles.
+    """
+    try:
+        cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
+        if not cloud_url:
+            frappe.throw("Cloud site URL not configured in Sync Settings")
+
+        # endpoint on cloud that returns users + roles
+        endpoint = f"{cloud_url}/api/method/your_app.api.get_all_users"
+        resp = requests.get(endpoint, timeout=10)
+        resp.raise_for_status()
+
+        users = resp.json().get("users", [])
+        if not users:
+            frappe.msgprint("No users found in cloud response")
+            return
+
+        for u in users:
+            email = u.get("email")
+            first_name = u.get("first_name", email.split("@")[0])
+            roles = u.get("roles", [])
+
+            # --- Create user if missing ---
+            if not frappe.db.exists("User", email):
+                user_doc = frappe.get_doc({
+                    "doctype": "User",
+                    "email": email,
+                    "first_name": first_name,
+                    "enabled": 1,
+                    "new_password": "changemenow123!"
+                })
+                user_doc.insert(ignore_permissions=True)
+                frappe.db.commit()
+                frappe.msgprint(f"Created user {email}")
+
+            # --- Assign roles ---
+            for role in roles:
+                if not frappe.db.exists("Has Role", {"parent": email, "role": role}):
+                    frappe.get_doc({
+                        "doctype": "Has Role",
+                        "parent": email,
+                        "role": role,
+                        "parenttype": "User",
+                        "parentfield": "roles"
+                    }).insert(ignore_permissions=True)
+            frappe.db.commit()
+
+        frappe.msgprint(f"Synced {len(users)} users with roles from cloud")
+
+    except Exception as e:
+        frappe.log_error(f"Error syncing users: {str(e)}", "Sync Users from Cloud")
+        frappe.throw(f"Error syncing users: {str(e)}")
 
 import frappe
 import requests
@@ -5720,6 +5775,8 @@ import requests
 @frappe.whitelist(allow_guest=True)
 def sync_cloud_settings():
     try:
+        sync_users_from_cloud()
+
         # --- 1️⃣ Get cloud URL ---
         cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
         if not cloud_url:
@@ -5845,20 +5902,20 @@ def sync_cloud_settings():
                         frappe.log_error(f"Failed to create warehouse {warehouse_name}: {str(e)}", "Sync Cloud Settings")
 
                 # Ensure user exists
-                if not frappe.db.exists("User", user_email):
-                    try:
-                        new_user = frappe.get_doc({
-                            "doctype": "User",
-                            "email": user_email,
-                            "first_name": user_email.split("@")[0],
-                            "enabled": 1,
-                            "new_password": "changemenow123!",
-                            "roles": []
-                        })
-                        new_user.insert(ignore_permissions=True)
-                        frappe.db.commit()
-                    except Exception as e:
-                        frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
+                # if not frappe.db.exists("User", user_email):
+                #     try:
+                #         new_user = frappe.get_doc({
+                #             "doctype": "User",
+                #             "email": user_email,
+                #             "first_name": user_email.split("@")[0],
+                #             "enabled": 1,
+                #             "new_password": "changemenow123!",
+                #             "roles": []
+                #         })
+                #         new_user.insert(ignore_permissions=True)
+                #         frappe.db.commit()
+                #     except Exception as e:
+                #         frappe.log_error(f"Failed to create user {user_email}: {str(e)}", "Sync Cloud Settings")
 
                                 # Check if Cost Center already exists
                 if not frappe.db.exists("Cost Center Details", {"cost_center": f"{child_cost_center_name} - {company_abbr}"}):
@@ -5899,6 +5956,43 @@ def sync_cloud_settings():
 
     except Exception as e:
         frappe.log_error(f"Error in sync_cloud_settings: {str(e)}", "Sync Cloud Settings")
+
+import frappe
+from frappe import _
+
+@frappe.whitelist(allow_guest=True)  # public endpoint
+def get_all_users():
+    try:
+        # get all enabled users except Administrator
+        users = frappe.get_all(
+            "User",
+            filters={"enabled": 1, "name": ["!=", "Administrator"]},
+            fields=["name", "email", "first_name"]
+        )
+
+        result = []
+        for u in users:
+            # get roles for this user
+            roles = frappe.get_all(
+                "Has Role",
+                filters={"parent": u.name},
+                fields=["role"]
+            )
+            role_list = [r.role for r in roles]
+
+            result.append({
+                "name": u.name,
+                "email": u.email,
+                "first_name": u.first_name,
+                "roles": role_list
+            })
+
+        return {"users": result}
+
+    except Exception as e:
+        frappe.log_error(message=str(e), title="Public User Sync")
+        return {"error": str(e)}
+
 @frappe.whitelist()
 def user_logout_now():
     """
