@@ -5710,34 +5710,53 @@ def filter_disabled_items(doctype, txt, filters, limit_start, limit_page_length,
         order_by=order_by
     )
 
-
-@frappe.whitelist()
+def ensure_role(role_name):
+    if not frappe.db.exists("Role", role_name):
+        role_doc = frappe.get_doc({
+            "doctype": "Role",
+            "role_name": role_name
+        })
+        role_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        print(f"✅ Created role: {role_name}")
+import requests
+@frappe.whitelist(allow_guest=True)
 def sync_users_from_cloud():
     """
     Fetch all users from the cloud endpoint and create them locally with roles.
     """
     try:
+        print("🔹 Starting user sync from cloud...")
         cloud_url = frappe.db.get_single_value("Sync Settings", "cloud_site_url")
         if not cloud_url:
             frappe.throw("Cloud site URL not configured in Sync Settings")
+        print(f"🔹 Cloud URL: {cloud_url}")
 
-        # endpoint on cloud that returns users + roles
+        # Use the actual cloud URL for fetching users
         endpoint = f"{cloud_url}/api/method/havano_restaurant_pos.api.get_all_users"
+        print(f"🔹 Fetching users from endpoint: {endpoint}")
+
         resp = requests.get(endpoint, timeout=10)
         resp.raise_for_status()
 
-        users = resp.json().get("users", [])
+        cloud_json = resp.json()
+        print(f"🔹 Cloud response keys: {list(cloud_json.keys())}")
+        users = cloud_json.get("users") or cloud_json.get("data") or cloud_json.get("message", {}).get("users", [])
+        print(f"🔹 Number of users received: {len(users)}")
         if not users:
             frappe.msgprint("No users found in cloud response")
+            print("⚠️ No users found, exiting sync.")
             return
 
         for u in users:
             email = u.get("email")
             first_name = u.get("first_name", email.split("@")[0])
             roles = u.get("roles", [])
+            print(f"🔹 Processing user: {email}, roles: {roles}")
 
             # --- Create user if missing ---
             if not frappe.db.exists("User", email):
+                print(f"🔹 Creating user {email}")
                 user_doc = frappe.get_doc({
                     "doctype": "User",
                     "email": email,
@@ -5747,31 +5766,25 @@ def sync_users_from_cloud():
                 })
                 user_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
-                frappe.msgprint(f"Created user {email}")
+                print(f"✅ Created user {email}")
 
             # --- Assign roles ---
+            user_doc = frappe.get_doc("User", email)
             for role in roles:
-                if not frappe.db.exists("Has Role", {"parent": email, "role": role}):
-                    frappe.get_doc({
-                        "doctype": "Has Role",
-                        "parent": email,
-                        "role": role,
-                        "parenttype": "User",
-                        "parentfield": "roles"
-                    }).insert(ignore_permissions=True)
-            frappe.db.commit()
+                ensure_role(role)
+                if role not in [r.role for r in user_doc.roles]:
+                    user_doc.append("roles", {"role": role})
+            user_doc.save(ignore_permissions=True)
+            print(f"✅ Roles updated for user {email}")
 
+        frappe.db.commit()
         frappe.msgprint(f"Synced {len(users)} users with roles from cloud")
+        print("🎉 User sync completed successfully!")
 
     except Exception as e:
         frappe.log_error(f"Error syncing users: {str(e)}", "Sync Users from Cloud")
+        print(f"❌ Error syncing users: {str(e)}")
         frappe.throw(f"Error syncing users: {str(e)}")
-
-import frappe
-import requests
-import frappe
-import requests
-
 @frappe.whitelist(allow_guest=True)
 def sync_cloud_settings():
     try:
