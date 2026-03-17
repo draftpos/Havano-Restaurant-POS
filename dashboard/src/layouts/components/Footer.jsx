@@ -7,6 +7,8 @@ import CreditNoteDialog from "@/components/ui/CreditNoteDialog";
 import Container from "@/components/Shared/Container";
 import getNavLinks from "@/navLinks";
 import { useCartStore } from "@/stores/useCartStore";
+import { formatCurrency, handleCreateOrder, getDefaultCustomer } from "@/lib/utils";
+import { useOrderStore } from "@/stores/useOrderStore";
 import { isHotelAppInstalled } from "@/lib/utils";
 
 // Dropdown component
@@ -57,7 +59,59 @@ function NavDropdown({ label, items, onItemClick }) {
 // Footer
 const Footer = () => {
   const [navLinks, setNavLinks] = useState([]);
-  const { startNewTakeAwayOrder } = useCartStore();
+  const { startNewTakeAwayOrder, cart, orderType, customerName, customer, activeOrderId, activeTableId, activeWaiterId, transactionType, activeQuotationId, clearCart } = useCartStore();
+  const fetchOrders = useOrderStore((state) => state.fetchOrders);
+  const fetchTableOrders = useOrderStore((state) => state.fetchTableOrders);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigateTo = useNavigate();
+
+  const cartTotal = cart.reduce((total, item) => {
+    const price = item.price ?? item.standard_rate ?? 0;
+    const quantity = item.quantity ?? 1;
+    return total + (price * quantity);
+  }, 0);
+
+  const handleFooterPlaceOrder = async () => {
+    if (!cart || cart.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      let selectedCustomer = customerName || customer;
+      if (!selectedCustomer) {
+        selectedCustomer = await getDefaultCustomer();
+        if (!selectedCustomer) { setIsSubmitting(false); return; }
+      }
+      const payload = {
+        order_type: orderType || "Take Away",
+        customer_name: selectedCustomer,
+        order_items: cart.map((item) => ({
+          name: item.name || item.item_name,
+          item_code: item.name || item.item_name,
+          quantity: item.quantity || 1,
+          qty: item.quantity || 1,
+          price: item.price || item.standard_rate || 0,
+          rate: item.price || item.standard_rate || 0,
+          remark: item.remark || "",
+        })),
+        table: activeTableId || null,
+        waiter: activeWaiterId || null,
+      };
+      if (orderType === "Dine In") {
+        const result = await handleCreateOrder(payload);
+        if (result && result.success !== false) {
+          clearCart();
+          await fetchOrders();
+          if (activeTableId) await fetchTableOrders(activeTableId);
+          navigateTo(activeTableId ? `/tables/${activeTableId}` : "/menu");
+        }
+      } else {
+        navigateTo("/menu");
+      }
+    } catch (err) {
+      console.error("Footer place order error:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
   const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
   const [creditNoteDialogOpen, setCreditNoteDialogOpen] = useState(false);
@@ -104,7 +158,7 @@ const Footer = () => {
     <div>
       <hr className="border border-primary" />
       <Container>
-        <div className="py-4 flex items-center justify-between w-full">
+        <div className="py-2 flex items-center justify-between w-full">
           {/* Left icons */}
           <div className="flex items-center gap-2">
             <a
@@ -188,6 +242,50 @@ const Footer = () => {
                 );
               }
 
+              if (link.name === "Login/Logout") {
+                return (
+                  <div key="cart-and-login" className="flex items-center gap-3">
+                    {/* Login/Logout power icon */}
+                    <NavLink
+                      to={link.path}
+                      end
+                      onClick={(e) => handleNavClick(e, link)}
+                      className={() => ""}
+                      title="Login/Logout"
+                    >
+                      {({ isActive }) => (
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors ${isActive ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v4M6.343 6.343a8 8 0 1011.314 0" />
+                          </svg>
+                        </div>
+                      )}
+                    </NavLink>
+                    {/* Payment button + Cart Total */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={handleFooterPlaceOrder}
+                        disabled={cart.length === 0 || isSubmitting}
+                        className="h-8 px-3 text-sm font-semibold rounded-lg bg-primary text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                      >
+                        {transactionType === "Quotation"
+                          ? (activeQuotationId ? "Convert" : "Quotation")
+                          : (activeOrderId ? "Update" : "Payment")
+                        }
+                      </button>
+                      <div className="flex items-center justify-center bg-secondary rounded-lg h-8 px-3 min-w-[80px]">
+                        <span className="text-sm font-bold text-primary">
+                          {cart.length > 0
+                            ? formatCurrency(cartTotal)
+                            : (activeOrderId ? activeOrderId : "New Order")
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <NavLink
                   key={link.name}
@@ -205,6 +303,7 @@ const Footer = () => {
               );
             })}
           </div>
+
         </div>
       </Container>
 

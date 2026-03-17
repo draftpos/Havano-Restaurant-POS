@@ -74,6 +74,10 @@ export function MenuProvider({ children }) {
   }, [fetchMenuCategories]);
 
   useEffect(() => {
+    fetchMenuItems();
+  }, [fetchMenuItems]);
+
+  useEffect(() => {
     if (!visibleCategories.length) {
       setSelectedCategory(null);
       return;

@@ -5951,3 +5951,54 @@ def get_last_invoice_metrics():
         "change": change,
         "queued": queued_count
     }
+
+@frappe.whitelist()
+def get_pricing_rule_for_item(item_code, qty=1):
+    """Get applicable pricing rule for a specific item and quantity"""
+    try:
+        qty = float(qty)
+        today = frappe.utils.today()
+
+        # Get all active selling rules
+        rules = frappe.get_all("Pricing Rule", filters={
+            "disable": 0,
+            "selling": 1,
+        }, fields=["name", "discount_percentage", "min_qty", "max_qty", "valid_from", "valid_upto", "apply_on"])
+
+        for rule in rules:
+            # Check qty and date range
+            min_qty = rule.min_qty or 0
+            max_qty = rule.max_qty or 99999
+            valid_from = str(rule.valid_from or "2000-01-01")
+            valid_upto = str(rule.valid_upto or "2999-12-31")
+
+            if not (qty >= min_qty and qty <= max_qty and today >= valid_from and today <= valid_upto):
+                continue
+            if not rule.discount_percentage:
+                continue
+
+            # Check if item_code is in this rule's items
+            matched = frappe.db.exists("Pricing Rule Item Code", {
+                "parent": rule.name,
+                "item_code": item_code
+            })
+
+            if matched:
+                return {
+                    "success": True,
+                    "rule": rule.name,
+                    "discount_percentage": rule.discount_percentage,
+                    "min_qty": min_qty,
+                    "max_qty": max_qty
+                }
+
+        # No match — check if any rule covers this item (for out-of-range message)
+        any_rule = frappe.db.get_value("Pricing Rule Item Code", {"item_code": item_code}, "parent")
+        if any_rule:
+            r = frappe.get_value("Pricing Rule", any_rule, ["min_qty", "max_qty"], as_dict=True)
+            return {"success": False, "out_of_range": True, "min_qty": r.min_qty, "max_qty": r.max_qty}
+
+        return {"success": False, "out_of_range": False}
+    except Exception as e:
+        frappe.log_error(str(e), "get_pricing_rule_for_item")
+        return {"success": False, "error": str(e)}

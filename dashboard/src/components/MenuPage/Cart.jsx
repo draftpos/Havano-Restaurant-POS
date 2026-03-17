@@ -18,14 +18,11 @@ import {
 import { useCartStore } from "@/stores/useCartStore";
 import { useOrderStore } from "@/stores/useOrderStore";
 
-import Clock from "../HomePage/Clock";
 import { Button } from "../ui/button";
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
-  CardTitle,
 } from "../ui/card";
 import UpdateCartDialog from "./UpdateCartDialog";
 import PaymentDialog from "./PaymentDialog";
@@ -439,73 +436,32 @@ useEffect(() => {
 
   return (
     <>
-      <Card className="h-[90vh] flex flex-col">
-       <CardHeader>
-
-    <CardTitle className="flex flex-col gap-1">
-
+      <Card className="h-[90vh] flex flex-col !py-0 !gap-0">
+       <CardHeader className="!p-1 !gap-0">
       {/* POS Metrics */}
-      <div className="grid grid-cols-5 text-center text-[10px] text-gray-500">
-         <div>
-            <div>Invoice</div>
-            <div className="text-xs font-bold text-primary">
-              {previousMetrics.invoice}
-            </div>
-          </div>
-        <div>
-          <div>Total</div>
-          <div className="text-xs font-semibold text-black">
-            {formatCurrency(previousMetrics.total)}
-          </div>
+      <div className="grid grid-cols-5 text-center gap-x-1" style={{marginBottom: 0}}>
+        <div className="flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-400 leading-none">Invoice</span>
+          <span className="text-[9px] text-primary leading-tight">{previousMetrics.invoice}</span>
         </div>
-
-        <div>
-          <div>Paid</div>
-          <div className="text-xs font-semibold text-black">
-            {formatCurrency(previousMetrics.paid)}
-          </div>
+        <div className="flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-400 leading-none">Total</span>
+          <span className="text-[9px] text-gray-700 leading-tight">{formatCurrency(previousMetrics.total)}</span>
         </div>
-
-        <div>
-          <div>Change</div>
-          <div className="text-xs font-semibold text-black">
-            {formatCurrency(previousMetrics.change)}
-          </div>
+        <div className="flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-400 leading-none">Paid</span>
+          <span className="text-[9px] text-gray-700 leading-tight">{formatCurrency(previousMetrics.paid)}</span>
         </div>
-
-        <div>
-          <div>Queued</div>
-          <div className="text-xs font-semibold text-red-600">
-            {previousMetrics.queued}
-          </div>
+        <div className="flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-400 leading-none">Change</span>
+          <span className="text-[9px] text-gray-700 leading-tight">{formatCurrency(previousMetrics.change)}</span>
         </div>
-
+        <div className="flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-400 leading-none">Queued</span>
+          <span className="text-[9px] text-red-600 leading-tight">{previousMetrics.queued}</span>
+        </div>
       </div>
-
-      {/* Clock + Order Title */}
-      <div className="flex justify-between items-center">
-        <Clock />
-
-        {cart.length > 0 ? (
-          <h1 className="text-2xl font-bold text-primary">
-            Total: {formatCurrency(
-              cart.reduce((total, item) => {
-                const price = item.price ?? item.standard_rate ?? 0;
-                const quantity = item.quantity ?? 1;
-                return total + (price * quantity);
-              }, 0)
-            )}
-          </h1>
-        ) : activeOrderId ? (
-          <h1 className="text-2xl font-bold text-primary">{activeOrderId}</h1>
-        ) : (
-          <h1 className="text-2xl font-bold text-primary">New Order</h1>
-        )}
-      </div>
-
-    </CardTitle>
-
-  </CardHeader>
+    </CardHeader>
         <hr className="border border-gray-600" />
         <CardContent className="flex-1 overflow-y-auto py-1 px-2">
          {
@@ -554,21 +510,6 @@ useEffect(() => {
            )
          }
         </CardContent>
-        <hr className="border border-gray-600" />
-        <CardFooter className="py-2 px-3">
-          <Button
-            onClick={() => handleSubmitOrder(cart)}
-            size="lg"
-            className="w-full"
-            disabled={cart.length === 0 || isSubmitting}
-            title={cart.length === 0 ? "Add items to your cart first" : ""}
-          >
-            {transactionType === "Quotation" 
-              ? (activeQuotationId ? "Convert to Sales Invoice" : "Create Quotation (F10)")
-              : (activeOrderId ? "Update Order" : "Place Order (F10)")
-            }
-          </Button>
-        </CardFooter>
       </Card>
       <Toaster richColors duration={4000} position="top-center" />
       <UpdateCartDialog />

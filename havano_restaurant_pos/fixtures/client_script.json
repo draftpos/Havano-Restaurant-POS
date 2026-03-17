@@ -2,17 +2,6 @@
  {
   "docstatus": 0,
   "doctype": "Client Script",
-  "dt": "Sales Invoice",
-  "enabled": 0,
-  "modified": "2026-03-03 09:47:30.723553",
-  "module": "Havano Restaurant Pos",
-  "name": "print invoice",
-  "script": "frappe.ui.form.on('Sales Invoice', {\n    refresh: function(frm) {\n        frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(function(can_print_invoice) {\n            frm.can_print_invoice = can_print_invoice;\n            if (can_print_invoice) {\n                frm.add_custom_button(__('Print Invoice'), function() {\n                    downloadInvoice(frm.doc.name);\n                }, __('Actions'));\n            }\n        });\n    },\n    on_submit: function(frm) {\n        if (frm.doc.docstatus !== 1) return;\n        var doDownload = function(can_print) {\n            if (can_print) downloadInvoice(frm.doc.name);\n        };\n        if (frm.can_print_invoice !== undefined) {\n            doDownload(frm.can_print_invoice);\n        } else {\n            frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(doDownload);\n        }\n    }\n});\n\nfunction downloadInvoice(invoiceNumber) {\n    var url = frappe.urllib.get_full_url(\n        '/api/method/havano_restaurant_pos.api.download_invoice_json?name=' +\n        encodeURIComponent(invoiceNumber) + '&receipt_type='\n    );\n    var a = document.createElement('a');\n    a.href = url;\n    a.download = invoiceNumber + '.txt';\n    a.target = '_blank';\n    document.body.appendChild(a);\n    a.click();\n    document.body.removeChild(a);\n}",
-  "view": "Form"
- },
- {
-  "docstatus": 0,
-  "doctype": "Client Script",
   "dt": "Cost Center Details",
   "enabled": 1,
   "modified": "2026-03-07 10:44:00.382478",
@@ -41,6 +30,17 @@
   "module": "Havano Restaurant Pos",
   "name": "Sync Cloud Settings",
   "script": "frappe.ui.form.on('HA POS Settings', {\n    refresh: function(frm) {\n        // Remove old button if exists\n        $('.sync-cloud-btn').remove();\n\n        // Add a small purple icon button in header\n        frm.page.add_inner_button(__(''), function() {\n            frappe.show_alert({ message: __('Syncing settings...'), indicator: 'blue' }, 5);\n\n            frappe.call({\n                method: 'havano_restaurant_pos.api.sync_cloud_settings',\n                callback: function(r) {\n                    frappe.msgprint({\n                        title: __('Success'),\n                        message: __('HA POS Settings synced successfully!'),\n                        indicator: 'green'\n                    });\n                    frm.reload_doc();\n                },\n                error: function(err) {\n                    frappe.msgprint({\n                        title: __('Error'),\n                        message: __('Failed to sync settings: ' + (err.exc || JSON.stringify(err))),\n                        indicator: 'red'\n                    });\n                }\n            });\n        }).addClass('sync-cloud-btn').css({\n            'color': '#800080',      // purple color\n            'font-size': '16px',\n            'border': 'none',\n            'background': 'none',\n            'padding': '0 5px'\n        }).html('<i class=\"fa fa-refresh\"></i>'); // icon only\n    }\n});",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Sales Invoice",
+  "enabled": 1,
+  "modified": "2026-01-20 08:44:50.429377",
+  "module": "Havano Restaurant Pos",
+  "name": "print invoice",
+  "script": "frappe.ui.form.on('Sales Invoice', {\n    refresh: function(frm) {\n        frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(function(can_print_invoice) {\n            frm.can_print_invoice = can_print_invoice;\n            if (can_print_invoice) {\n                frm.add_custom_button(__('Print Invoice'), function() {\n                    downloadInvoice(frm.doc.name);\n                }, __('Actions'));\n            }\n        });\n    },\n    on_submit: function(frm) {\n        if (frm.doc.docstatus !== 1) return;\n        var doDownload = function(can_print) {\n            if (can_print) downloadInvoice(frm.doc.name);\n        };\n        if (frm.can_print_invoice !== undefined) {\n            doDownload(frm.can_print_invoice);\n        } else {\n            frappe.db.get_single_value('HA POS Settings', 'can_print_invoice').then(doDownload);\n        }\n    }\n});\n\nfunction downloadInvoice(invoiceNumber) {\n    var url = frappe.urllib.get_full_url(\n        '/api/method/havano_restaurant_pos.api.download_invoice_json?name=' +\n        encodeURIComponent(invoiceNumber) + '&receipt_type='\n    );\n    var a = document.createElement('a');\n    a.href = url;\n    a.download = invoiceNumber + '.txt';\n    a.target = '_blank';\n    document.body.appendChild(a);\n    a.click();\n    document.body.removeChild(a);\n}",
   "view": "Form"
  }
 ]

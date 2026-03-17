@@ -246,6 +246,14 @@ const Home = () => {
               >
                 TAKE AWAY
               </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => window.open("http://127.0.0.1:8002/app/sales-order/new-sales-order-1", "_blank")}
+                className="border-primary/30 shadow-sm hover:shadow-md"
+              >
+                LAYBYE
+              </Button>
             </div>
             <div className="space-y-4">
               <Card className="px-4 h-[65vh]">
@@ -328,3 +336,4 @@ const Home = () => {
 };
 
 export default Home;
+// TESTBUILD123
