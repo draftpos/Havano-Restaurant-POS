@@ -4555,6 +4555,7 @@ def get_menu_items_with_user_prices():
 
     user_price_list = None
     user_cost_center = None
+    use_cost_center = settings.item_view_per_cost_center  # ✅ toggle
 
     # 🔍 get user's price list + cost center
     for row in settings.user_mapping:
@@ -4565,8 +4566,9 @@ def get_menu_items_with_user_prices():
 
     print("💰 User Price List:", user_price_list)
     print("🏢 User Cost Center:", user_cost_center)
+    print("⚙️ Use Cost Center Filter:", use_cost_center)
 
-    # 🧱 hidden item groups
+    # 🚫 hidden item groups
     hidden_groups = set(frappe.get_all(
         "Item Group",
         filters={"custom_do_not_show_in_pos": 1},
@@ -4575,33 +4577,43 @@ def get_menu_items_with_user_prices():
 
     print("🚫 Hidden Item Groups:", hidden_groups)
 
-    # 🧠 STEP 1: get items linked to user's cost center
+    # 🧠 STEP 1: get items based on cost center (ONLY if enabled)
     item_names = []
-    if user_cost_center:
-        item_names = frappe.get_all(
-            "item_costcenters",
-            filters={"cost_center": user_cost_center},
-            pluck="parent"
-        )
 
-    print("📦 Items linked to cost center:", item_names)
-    print("📦 Items linked to cost center:", item_names)
+    if use_cost_center:
+        print("🔒 Cost center filtering ENABLED")
 
-    # 🧠 STEP 2: fetch items
+        if user_cost_center:
+            item_names = frappe.get_all(
+                "item_costcenters",
+                filters={"cost_center": user_cost_center},
+                pluck="parent"
+            )
+            print("📦 Items linked to cost center:", item_names)
+        else:
+            print("⚠️ No cost center for user. Returning empty list.")
+            return []
+    else:
+        print("🚀 Cost center filtering DISABLED (show all items)")
+
+    # 🧠 STEP 2: build filters
     filters = {
         "custom_do_not_show_in_pos": 0,
         "disabled": 0,
         "variant_of": ""
     }
 
-    if item_names:
-        filters["name"] = ["in", item_names]
-    else:
-        print("⚠️ No items found for this cost center. Returning empty list.")
-        return []
+    # ✅ apply filter only if toggle is ON
+    if use_cost_center:
+        if item_names:
+            filters["name"] = ["in", item_names]
+        else:
+            print("⚠️ No items found for this cost center. Returning empty list.")
+            return []
 
     print("🔎 Final Item Filters:", filters)
 
+    # 📦 fetch items
     items = frappe.get_all(
         "Item",
         filters=filters,
@@ -4617,9 +4629,8 @@ def get_menu_items_with_user_prices():
 
     print(f"📊 Items fetched before group filtering: {len(items)}")
 
-    # 🚫 remove hidden groups
-    # if hidden_groups:
-    #     items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
+    # (optional) hidden group filtering
+    # items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
 
     print(f"📊 Items after hidden group filter: {len(items)}")
 
@@ -4629,13 +4640,17 @@ def get_menu_items_with_user_prices():
         price_data = frappe.get_all(
             "Item Price",
             filters={"price_list": user_price_list},
-            fields=["item_code", "price_list_rate"]
+            fields=["item_code", "price_list_rate", "uom"]
         )
-        item_prices = {p.item_code: p.price_list_rate for p in price_data}
+
+        for p in price_data:
+            if p.item_code == "testing 3":
+                print(p)
+            item_prices[(p.item_code, p.uom)] = p.price_list_rate
 
     print("💵 Item price map size:", len(item_prices))
 
-    # 📦 barcodes
+    # 🏷️ barcodes
     item_codes = [i["name"] for i in items]
     barcode_rows = frappe.get_all(
         "Item Barcode",
@@ -4651,13 +4666,16 @@ def get_menu_items_with_user_prices():
 
     # 🔗 attach price + barcodes
     for item in items:
-        item["standard_rate"] = item_prices.get(item["name"], item["standard_rate"])
+        item["prices_by_uom"] = {
+        uom: price
+        for (code, uom), price in item_prices.items()
+        if code == item["name"]
+    }
         item["barcodes"] = barcodes_by_item.get(item["name"], [])
 
     print("✅ Final items ready:", len(items))
 
     return items
-
 
 @frappe.whitelist()
 def create_invoice_and_payment_queue(payload=None, **kwargs):

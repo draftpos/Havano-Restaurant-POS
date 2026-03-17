@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
 import { checkStock, getItemUoms, negativeStock, getItemVariants } from "@/lib/utils";
@@ -15,14 +15,22 @@ const MenuItemCard = ({ item, index }) => {
   const [dynamicUoms, setDynamicUoms] = useState([]);
   const [addingItemName, setAddingItemName] = useState(null);
 
-  const { currentIndex, setCurrentIndex, target, setTarget, allowNegativeStock } = useMenuContext();
-  const addToCart = useCartStore((state) => state.addToCart);
-  const cartItems = useCartStore((state) => state.cart || []);
-
   const [showVariantModal, setShowVariantModal] = useState(false);
   const [variantsToShow, setVariantsToShow] = useState([]);
 
+  const { currentIndex, setCurrentIndex, target, setTarget, allowNegativeStock } = useMenuContext();
+  const addToCart = useCartStore((state) => state.addToCart);
+
   const isActive = currentIndex === index && target === "menu";
+
+  const getPrice = (baseItem, uom) => {
+    return (
+      baseItem?.prices_by_uom?.[uom] ??
+      baseItem?.standard_rate ??
+      baseItem?.price ??
+      0
+    );
+  };
 
   const handleAddToCart = async () => {
     if (addingItemName === item.name) return;
@@ -58,6 +66,8 @@ const MenuItemCard = ({ item, index }) => {
         toast.error(`No UOMs found for ${item.item_name}`);
         return;
       }
+
+      // Multiple UOMs → show modal
       if (fetchedUoms.length > 1) {
         setPendingItem(item);
         setDynamicUoms(fetchedUoms);
@@ -67,29 +77,31 @@ const MenuItemCard = ({ item, index }) => {
 
       // Fetch Variants
       const fetchedVariantsRaw = await getItemVariants(item.name);
-
       const fetchedVariants = Array.isArray(fetchedVariantsRaw)
         ? fetchedVariantsRaw
         : fetchedVariantsRaw
-          ? [fetchedVariantsRaw]
-          : [];
+        ? [fetchedVariantsRaw]
+        : [];
 
-      // If variants exist, show VariantSelectModal
       if (fetchedVariants.length > 0) {
-      setPendingItem(item);
-      setVariantsToShow(fetchedVariants);
-      setShowVariantModal(true);
-      return;
-    }
-      // No variants → add directly
+        setPendingItem(item);
+        setVariantsToShow(fetchedVariants);
+        setShowVariantModal(true);
+        return;
+      }
+
+      // ✅ SINGLE UOM → add directly
+      const uom = fetchedUoms[0];
+      const price = getPrice(item, uom);
+
       addToCart({
         name: item.name,
         item_name: item.item_name,
         custom_menu_category: item.custom_menu_category,
         quantity: 1,
-        uom: fetchedUoms[0],
-        price: item.standard_rate ?? item.price ?? 0,
-        standard_rate: item.standard_rate ?? item.price ?? 0,
+        uom,
+        price,
+        standard_rate: price,
         remark: "No stock override",
       });
 
@@ -100,18 +112,21 @@ const MenuItemCard = ({ item, index }) => {
     }
   };
 
-  // Handle selection from modal (UOM or Variant)
+  // ✅ UOM select
   const handleUomSelect = (selected) => {
     if (!pendingItem) return;
+
+    const uom = selected.stock_uom || selected;
+    const price = getPrice(pendingItem, uom);
 
     addToCart({
       name: selected.name || pendingItem.name,
       item_name: selected.item_name || pendingItem.item_name,
       custom_menu_category: pendingItem.custom_menu_category,
       quantity: 1,
-      uom: selected.stock_uom || selected, // variant has stock_uom, UOM is string
-      price: selected.standard_rate ?? selected.price ?? pendingItem.standard_rate ?? 0,
-      standard_rate: selected.standard_rate ?? selected.price ?? pendingItem.standard_rate ?? 0,
+      uom,
+      price,
+      standard_rate: price,
       remark: "No stock override",
     });
 
@@ -125,7 +140,11 @@ const MenuItemCard = ({ item, index }) => {
     setTarget("menu");
   };
 
-  const imageUrl = item.image ? (item.image.startsWith("/") ? item.image : `/${item.image}`) : null;
+  const imageUrl = item.image
+    ? item.image.startsWith("/")
+      ? item.image
+      : `/${item.image}`
+    : null;
 
   return (
     <>
@@ -144,7 +163,11 @@ const MenuItemCard = ({ item, index }) => {
       >
         <CardHeader className="flex flex-col items-center gap-2 px-3 py-1 w-full">
           {imageUrl && (
-            <img src={imageUrl} alt={item.item_name} className="w-full aspect-square object-cover rounded-md flex-shrink-0" />
+            <img
+              src={imageUrl}
+              alt={item.item_name}
+              className="w-full aspect-square object-cover rounded-md flex-shrink-0"
+            />
           )}
           <CardTitle className="break-words text-center whitespace-normal text-sm leading-tight w-full">
             {item.item_name}
@@ -152,9 +175,10 @@ const MenuItemCard = ({ item, index }) => {
         </CardHeader>
       </Card>
 
+      {/* UOM Modal */}
       {showUomModal && (
         <UomSelectModal
-          uoms={dynamicUoms} // either UOMs or Variants
+          uoms={dynamicUoms}
           onSelect={handleUomSelect}
           onClose={() => {
             setShowUomModal(false);
@@ -164,33 +188,36 @@ const MenuItemCard = ({ item, index }) => {
         />
       )}
 
-{showVariantModal && (
-  <VariantSelectModal
-    variants={variantsToShow}
-    onSelect={(variant) => {
-      addToCart({
-        name: variant.name || pendingItem.name,
-        item_name: variant.item_name || pendingItem.item_name,
-        custom_menu_category: pendingItem.custom_menu_category,
-        quantity: 1,
-        uom: variant.stock_uom || variant, // variant UOM if present
-        price: pendingItem.standard_rate ?? pendingItem.price ?? 0, // parent item price
-        standard_rate: pendingItem.standard_rate ?? pendingItem.price ?? 0, // parent item price
-        remark: "No stock override",
-      });
-      setShowVariantModal(false);
-      setPendingItem(null);
-      setVariantsToShow([]);
-    }}
-    onClose={() => {
-      setShowVariantModal(false);
-      setPendingItem(null);
-      setVariantsToShow([]);
-    }}
+      {/* Variant Modal */}
+      {showVariantModal && (
+        <VariantSelectModal
+          variants={variantsToShow}
+          onSelect={(variant) => {
+            const uom = variant.stock_uom || variant;
+            const price = getPrice(pendingItem, uom);
 
-    
-  />
-)}
+            addToCart({
+              name: variant.name || pendingItem.name,
+              item_name: variant.item_name || pendingItem.item_name,
+              custom_menu_category: pendingItem.custom_menu_category,
+              quantity: 1,
+              uom,
+              price,
+              standard_rate: price,
+              remark: "No stock override",
+            });
+
+            setShowVariantModal(false);
+            setPendingItem(null);
+            setVariantsToShow([]);
+          }}
+          onClose={() => {
+            setShowVariantModal(false);
+            setPendingItem(null);
+            setVariantsToShow([]);
+          }}
+        />
+      )}
     </>
   );
 };
