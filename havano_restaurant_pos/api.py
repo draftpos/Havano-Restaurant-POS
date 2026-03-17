@@ -4546,45 +4546,84 @@ def make_multi_currency_payment(customer, payments):
             "message": "Failed to make multi-currency payment",
             "details": f"{error_type}: {error_msg}",
         }
-
 @frappe.whitelist()
 def get_menu_items_with_user_prices():
-    """
-    Returns all menu items with their prices according to the logged-in user's pricelist.
-    """
     user = frappe.session.user
+    print("\n👤 Logged in user:", user)
+
     settings = frappe.get_single("HA POS Settings")
 
-    # get user's pricelist
     user_price_list = None
+    user_cost_center = None
+
+    # 🔍 get user's price list + cost center
     for row in settings.user_mapping:
         if row.user == user:
             user_price_list = row.price_list
+            user_cost_center = row.cost_center
             break
 
-    # get item groups hidden from POS
-    hidden_groups = frappe.get_all(
+    print("💰 User Price List:", user_price_list)
+    print("🏢 User Cost Center:", user_cost_center)
+
+    # 🧱 hidden item groups
+    hidden_groups = set(frappe.get_all(
         "Item Group",
         filters={"custom_do_not_show_in_pos": 1},
         pluck="name"
-    )
-    hidden_groups = set(hidden_groups or [])
+    ) or [])
 
-    # fetch all menu items visible in POS
-    items = frappe.get_all(
-    "Item",
-    filters={
+    print("🚫 Hidden Item Groups:", hidden_groups)
+
+    # 🧠 STEP 1: get items linked to user's cost center
+    item_names = []
+    if user_cost_center:
+        item_names = frappe.get_all(
+            "item_costcenters",
+            filters={"cost_center": user_cost_center},
+            pluck="parent"
+        )
+
+    print("📦 Items linked to cost center:", item_names)
+    print("📦 Items linked to cost center:", item_names)
+
+    # 🧠 STEP 2: fetch items
+    filters = {
         "custom_do_not_show_in_pos": 0,
         "disabled": 0,
-        "variant_of": ""  # only items that are NOT variants
-    },
-    fields=["name", "item_name", "item_group", "custom_menu_category", "standard_rate", "image"]
-)
-    # exclude items whose item_group has do_not_show_in_pos
-    if hidden_groups:
-        items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
+        "variant_of": ""
+    }
 
-    # fetch item prices in one go
+    if item_names:
+        filters["name"] = ["in", item_names]
+    else:
+        print("⚠️ No items found for this cost center. Returning empty list.")
+        return []
+
+    print("🔎 Final Item Filters:", filters)
+
+    items = frappe.get_all(
+        "Item",
+        filters=filters,
+        fields=[
+            "name",
+            "item_name",
+            "item_group",
+            "custom_menu_category",
+            "standard_rate",
+            "image"
+        ]
+    )
+
+    print(f"📊 Items fetched before group filtering: {len(items)}")
+
+    # 🚫 remove hidden groups
+    # if hidden_groups:
+    #     items = [i for i in items if (i.get("item_group") or "") not in hidden_groups]
+
+    print(f"📊 Items after hidden group filter: {len(items)}")
+
+    # 💰 prices
     item_prices = {}
     if user_price_list:
         price_data = frappe.get_all(
@@ -4594,21 +4633,28 @@ def get_menu_items_with_user_prices():
         )
         item_prices = {p.item_code: p.price_list_rate for p in price_data}
 
-    # fetch barcodes for all items (for search by scan)
+    print("💵 Item price map size:", len(item_prices))
+
+    # 📦 barcodes
     item_codes = [i["name"] for i in items]
     barcode_rows = frappe.get_all(
         "Item Barcode",
         filters={"parent": ["in", item_codes]},
         fields=["parent", "barcode"]
     )
+
     barcodes_by_item = {}
     for row in barcode_rows:
         barcodes_by_item.setdefault(row["parent"], []).append(row.get("barcode") or "")
 
-    # attach price and barcodes to each item
+    print("🏷️ Barcode entries fetched:", len(barcode_rows))
+
+    # 🔗 attach price + barcodes
     for item in items:
         item["standard_rate"] = item_prices.get(item["name"], item["standard_rate"])
         item["barcodes"] = barcodes_by_item.get(item["name"], [])
+
+    print("✅ Final items ready:", len(items))
 
     return items
 
