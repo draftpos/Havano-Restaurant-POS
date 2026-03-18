@@ -289,6 +289,7 @@ fixtures = [
                 "Item-custom_is_order_item_5",
                 "Item-custom_is_order_item_6",
                 "Item-custom_cost_centers",
+                "Cost Center-custom_uom",
                 "Payment Entry-custom_shift",
                 "Item Group-custom_do_not_show_in_pos"
           

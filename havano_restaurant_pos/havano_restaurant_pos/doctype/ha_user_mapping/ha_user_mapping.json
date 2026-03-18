@@ -20,7 +20,8 @@
   "column_break_trdm",
   "allowed_credit_note",
   "allowed_reprint_invoice",
-  "password"
+  "password",
+  "allowed_uom"
  ],
  "fields": [
   {
@@ -116,13 +117,19 @@
    "label": "Warehouse",
    "options": "Warehouse",
    "reqd": 1
+  },
+  {
+   "fetch_from": "cost_center.uom",
+   "fieldname": "allowed_uom",
+   "fieldtype": "Data",
+   "label": "Allowed UOM"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-03-06 13:18:51.923841",
+ "modified": "2026-03-18 10:56:14.800372",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "Ha User Mapping",

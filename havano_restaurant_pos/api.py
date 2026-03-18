@@ -6122,3 +6122,73 @@ def get_last_invoice_metrics():
         "change": change,
         "queued": queued_count
     }
+
+
+
+@frappe.whitelist()
+def get_user_uom_config():
+    print("\n🔥 === get_user_uom_config CALLED ===")
+
+    try:
+        settings = frappe.get_single("HA POS Settings")
+        print("✅ Loaded HA POS Settings")
+
+        print(f"👉 user_specific_uoms: {settings.user_specific_uoms}")
+
+        # If feature OFF → allow everything
+        if not settings.user_specific_uoms:
+            print("⚠️ Feature disabled → returning unrestricted config")
+
+            return {
+                "enabled": False,
+                "uoms": []
+            }
+
+        current_user = frappe.session.user
+        print(f"👤 Current user: {current_user}")
+
+        allowed_uoms = []
+
+        print("📦 Looping through user_mapping...")
+
+        for row in settings.user_mapping:
+            print(f"➡️ Row user: {row.user}")
+
+            if row.user == current_user:
+                print("   ✅ Match found for current user")
+
+                # adjust field name if needed
+                if hasattr(row, "allowed_uom") and row.allowed_uom:
+                    print(f"   📌 Found UOM: {row.allowed_uom}")
+                    allowed_uoms.append(row.allowed_uom)
+
+                elif hasattr(row, "allowed_uoms") and row.allowed_uoms:
+                    allowed_uoms.append(row.allowed_uoms)
+
+                else:
+                    print("   ⚠️ No UOM field found on this row")
+
+        # Remove duplicates
+        allowed_uoms = list(set(allowed_uoms))
+
+        print(f"🎯 Final allowed UOMs: {allowed_uoms}")
+
+        result = {
+            "enabled": True,
+            "uoms": allowed_uoms
+        }
+
+        print(f"🚀 Returning: {result}")
+        print("🔥 === END get_user_uom_config ===\n")
+
+        return result
+
+    except Exception as e:
+        print("❌ ERROR in get_user_uom_config")
+        print(str(e))
+        frappe.log_error(frappe.get_traceback(), "get_user_uom_config error")
+
+        return {
+            "enabled": False,
+            "uoms": []
+        }

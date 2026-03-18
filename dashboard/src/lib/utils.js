@@ -679,6 +679,20 @@ export async function convertQuotationToSalesInvoice(quotationName) {
   );
 }
 
+export async function getUserUomConfig() {
+  return attemptWithRetries(
+    async () => {
+      const { message } = await call.post(
+        "havano_restaurant_pos.api.get_user_uom_config"
+      );
+
+      console.log("✅ getUserUomConfig response:", message);
+
+      return message;
+    },
+    "Get User UOM Config"
+  );
+}
 /**
  * Update quotation with new items and convert to Sales Invoice, then create payment and HA Order.
  * @param {string} quotationName - Name of the Quotation

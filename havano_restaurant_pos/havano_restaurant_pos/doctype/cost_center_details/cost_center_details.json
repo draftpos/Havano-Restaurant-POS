@@ -8,6 +8,7 @@
   "company_name",
   "cost_center",
   "email",
+  "uom",
   "column_break_tkhp",
   "address_line_1",
   "address_line_2",
@@ -54,12 +55,18 @@
    "fieldname": "phone",
    "fieldtype": "Data",
    "label": "Phone"
+  },
+  {
+   "fetch_from": "cost_center.custom_uom",
+   "fieldname": "uom",
+   "fieldtype": "Data",
+   "label": "UOM"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-06 09:27:17.691589",
+ "modified": "2026-03-18 10:55:37.319050",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "Cost Center Details",

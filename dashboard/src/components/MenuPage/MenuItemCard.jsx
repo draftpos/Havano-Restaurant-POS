@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { checkStock, getItemUoms, negativeStock, getItemVariants } from "@/lib/utils";
+import { checkStock, getItemUoms, negativeStock, getItemVariants, getUserUomConfig } from "@/lib/utils";
 import { toast } from "sonner";
 
 import { useMenuContext } from "@/contexts/MenuContext";
@@ -10,6 +10,7 @@ import UomSelectModal from "../ui/uom";
 import VariantSelectModal from "../ui/VariantSelectModal";
 
 const MenuItemCard = ({ item, index }) => {
+  const [userUomConfig, setUserUomConfig] = useState(null);
   const [showUomModal, setShowUomModal] = useState(false);
   const [pendingItem, setPendingItem] = useState(null);
   const [dynamicUoms, setDynamicUoms] = useState([]);
@@ -31,6 +32,29 @@ const MenuItemCard = ({ item, index }) => {
       0
     );
   };
+  const fetchUserUomConfig = async () => {
+  if (userUomConfig) {
+    console.log("🧠 Using cached config:", userUomConfig);
+    return userUomConfig;
+  }
+
+  try {
+    console.log("📡 Fetching user UOM config...");
+
+    const config = await getUserUomConfig();
+
+    setUserUomConfig(config);
+    return config;
+
+  } catch (err) {
+    console.error("❌ Failed to fetch UOM config:", err);
+
+    return {
+      enabled: false,
+      uoms: []
+    };
+  }
+};
 
   const handleAddToCart = async () => {
     if (addingItemName === item.name) return;
@@ -112,28 +136,46 @@ const MenuItemCard = ({ item, index }) => {
     }
   };
 
-  // ✅ UOM select
-  const handleUomSelect = (selected) => {
-    if (!pendingItem) return;
+  const handleUomSelect = async (selected) => {
+  if (!pendingItem) return;
 
-    const uom = selected.stock_uom || selected;
-    const price = getPrice(pendingItem, uom);
+  const config = await fetchUserUomConfig();
 
-    addToCart({
-      name: selected.name || pendingItem.name,
-      item_name: selected.item_name || pendingItem.item_name,
-      custom_menu_category: pendingItem.custom_menu_category,
-      quantity: 1,
-      uom,
-      price,
-      standard_rate: price,
-      remark: "No stock override",
-    });
+  const uom = selected.stock_uom || selected;
 
-    setShowUomModal(false);
-    setPendingItem(null);
-    setDynamicUoms([]);
-  };
+  console.log("👉 Selected UOM:", uom);
+  console.log("🔐 Config:", config);
+
+  // 🚫 VALIDATION
+  if (config?.enabled) {
+    const isAllowed = config.uoms.includes(uom);
+
+    if (!isAllowed) {
+      toast.error("Not allowed", {
+        description: `You are not allowed to use UOM "${uom}"`,
+      });
+      return;
+    }
+  }
+
+  // ✅ proceed
+  const price = getPrice(pendingItem, uom);
+
+  addToCart({
+    name: selected.name || pendingItem.name,
+    item_name: selected.item_name || pendingItem.item_name,
+    custom_menu_category: pendingItem.custom_menu_category,
+    quantity: 1,
+    uom,
+    price,
+    standard_rate: price,
+    remark: "No stock override",
+  });
+
+  setShowUomModal(false);
+  setPendingItem(null);
+  setDynamicUoms([]);
+};
 
   const handleSelectItem = () => {
     setCurrentIndex(index);

@@ -21,6 +21,7 @@
   "hide_dinetakeaway",
   "auto_logout_user",
   "item_view_per_cost_center",
+  "user_specific_uoms",
   "section_break_yhyv",
   "selected_payment_methods",
   "section_break_holp",
@@ -141,13 +142,19 @@
    "fieldname": "item_view_per_cost_center",
    "fieldtype": "Check",
    "label": "Item View Per Cost Center"
+  },
+  {
+   "default": "0",
+   "fieldname": "user_specific_uoms",
+   "fieldtype": "Check",
+   "label": "User Specific UOMS"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-03-17 15:21:55.530866",
+ "modified": "2026-03-18 10:37:04.111152",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "HA POS Settings",
