@@ -3051,6 +3051,12 @@ def add_remark(remark_text: str = None):
 
     return {"status": "success", "remark": doc.remark}
 
+def get_fullname_from_email(email):
+    if not email:
+        return None
+
+    return frappe.db.get_value("User", email, "full_name")
+
 def _build_invoice_json(invoice_doc, cost_center_doc=None):
     """
     Build invoice JSON from Sales Invoice doc. Optimized: batch item flags, minimal queries.
@@ -3145,7 +3151,7 @@ def _build_invoice_json(invoice_doc, cost_center_doc=None):
         "InvoiceNo": invoice_doc.name,
         "KOT": invoice_doc.name[-4:],
         "InvoiceDate": invoice_doc.creation.strftime("%Y-%m-%d"),
-        "CashierName": invoice_doc.owner,
+        "CashierName": get_fullname_from_email(invoice_doc.owner),
         "CustomerName": invoice_doc.customer_name,
         "CustomerContact": invoice_doc.contact_display or invoice_doc.customer_name,
         "CustomerTradeName": getattr(invoice_doc, "customer_trade_name", None),
