@@ -2961,69 +2961,57 @@ def item_is_orders(item_name):
     default = {f"Item-{f}": False for f in custom_fields}
     flags = _get_item_order_flags_batch([item_name])
     return flags.get(item_name, default)
-
+    
 @frappe.whitelist()
 def get_stock(item_code):
-    """
-    Returns stock for an item using its default warehouse
-    (Item → item_defaults → default_warehouse)
-    """
     if not item_code:
         return {"error": "Item code is required"}
 
     try:
-        print("🔍 Loading Item:", item_code)
+        current_user = frappe.session.user
+        target_warehouse = None
 
-        item = frappe.get_doc("Item", item_code)
+        # Fetch the settings document
+        # Note: If 'HA POS Settings' is a 'Single' DocType, use frappe.get_single
+        pos_settings = frappe.get_doc("HA POS Settings")
 
-        print("📄 Item loaded")
-        print("🔢 item_defaults rows:", len(item.item_defaults))
+        # Loop through the child table 'user_mapping'
+        for row in pos_settings.get("user_mapping"):
+            if row.user == current_user:
+                target_warehouse = row.warehouse
+                break 
+        
+        # --- THE PRINT SECTION ---
+        if target_warehouse:
+            print(f"🎯 Found Warehouse: {target_warehouse} for User: {current_user}")
+        else:
+            print(f"⚠️ No warehouse mapped for User: {current_user}")
+        # -------------------------
 
-        # Deduplicate warehouses
-        warehouses = []
-        for row in item.item_defaults:
-            print("➡ Row:")
-            print("   Company:", row.company)
-            print("   Default Warehouse:", row.default_warehouse)
-
-            if row.default_warehouse and row.default_warehouse not in warehouses:
-                warehouses.append(row.default_warehouse)
-
-        print("📦 Warehouses found:", warehouses)
-
-        if not warehouses:
+        if not target_warehouse:
             return {
-                "item_code": item_code,
-                "stock": 0,
-                "warehouse": None
+                "error": f"No warehouse mapping found for {current_user}"
             }
 
-        warehouse = warehouses[0]
-        print("✅ Using warehouse:", warehouse)
-
-        stock_entry = frappe.db.get_value(
+        # Get the actual quantity from the Bin
+        qty = frappe.db.get_value(
             "Bin",
-            {
-                "item_code": item_code,
-                "warehouse": warehouse
-            },
-            "actual_qty")
-
-        qty = stock_entry or 0
-
-        print("📊 Stock found:", qty)
+            {"item_code": item_code, "warehouse": target_warehouse},
+            "actual_qty"
+        ) or 0
 
         return {
             "item_code": item_code,
-            "warehouse": warehouse,
+            "warehouse": target_warehouse,
             "stock": qty
         }
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Stock check failed")
+        frappe.log_error(frappe.get_traceback(), "POS Stock check failed")
         return {"error": str(e)}
 
-import frappe
+
+
 from frappe import _
 
 @frappe.whitelist(allow_guest=False)
