@@ -59,6 +59,7 @@ set({ menuItems: parentItems, loading: false });
     try {
       const item_groups = await db.getDocList("Item Group", {
         fields: ["name", "item_group_name", "custom_do_not_show_in_pos"],
+        limit: 1000,
       });
       const data = item_groups
         .filter((group) => !group.custom_do_not_show_in_pos)
@@ -66,6 +67,8 @@ set({ menuItems: parentItems, loading: false });
           name: group.name,
           category_name: group.item_group_name,
         }));
+      console.log(item_groups);
+      console.log(data);
       set({ menuCategories: data, loading: false });
     } catch (err) {
       console.error("Fetch error:", err);

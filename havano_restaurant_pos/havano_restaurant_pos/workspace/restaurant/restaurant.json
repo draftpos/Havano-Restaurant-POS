@@ -68,7 +68,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-02-06 08:25:10.904041",
+ "modified": "2026-03-26 17:35:35.645691",
  "modified_by": "Administrator",
  "module": "Havano Restaurant Pos",
  "name": "Restaurant",
@@ -78,7 +78,7 @@
  "public": 1,
  "quick_lists": [],
  "roles": [],
- "sequence_id": 2.0,
+ "sequence_id": 8.0,
  "shortcuts": [
   {
    "color": "Grey",
