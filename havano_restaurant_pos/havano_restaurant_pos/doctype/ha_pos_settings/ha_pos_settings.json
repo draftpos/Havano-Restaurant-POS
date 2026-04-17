@@ -18,7 +18,6 @@
   "default_price_list",
   "default_payment_method",
   "can_print_invoice",
-  "enable_fiscalisation",
   "hide_dinetakeaway",
   "auto_logout_user",
   "item_view_per_cost_center",
@@ -89,12 +88,6 @@
    "fieldname": "can_print_invoice",
    "fieldtype": "Check",
    "label": "Can Print Invoice"
-  },
-  {
-   "default": "0",
-   "fieldname": "enable_fiscalisation",
-   "fieldtype": "Check",
-   "label": "Enable Fiscalisation"
   },
   {
    "default": "0",

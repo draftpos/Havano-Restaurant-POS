@@ -1,9 +1,12 @@
 // Copyright (c) 2025, Chipo and contributors
 // For license information, please see license.txt
+
 // frappe.ui.form.on("HA POS Settings", {
 // 	refresh(frm) {
+
 // 	},
 // });
+
 frappe.ui.form.on("HA POS Payment Method", {
 	mode_of_payment: function(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
