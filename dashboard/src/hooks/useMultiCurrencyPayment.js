@@ -91,8 +91,9 @@ function useMultiCurrencyPayment() {
 					const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 					const settingsRes = await call.get("havano_restaurant_pos.api.get_ha_pos_settings");
 					const canPrint = Boolean(settingsRes?.message?.data?.can_print_invoice);
+					const fiscalisationEnabled = Boolean(settingsRes?.message?.data?.enable_fiscalisation);
 					
-					if (canPrint) {
+					if (canPrint && fiscalisationEnabled) {
 					const invoiceName = res.sales_invoice;
 					const receiptType = selectedReceipt || "";
 
