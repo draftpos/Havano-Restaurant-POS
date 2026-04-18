@@ -51,6 +51,73 @@ const MenuPage = () => {
     startNewTakeAwayOrder();
   };
 
+  const [laybySaving, setLaybySaving] = useState(false);
+
+  const handleLaybyClick = async () => {
+    const { cartItems, activeCustomer, activePosProfile } = useCartStore.getState();
+
+    if (!cartItems || cartItems.length === 0) {
+      alert("Cart is empty. Add items before creating a Layby.");
+      return;
+    }
+
+    setLaybySaving(true);
+    try {
+      const items = cartItems.map((item) => ({
+        item_code: item.item_code,
+        item_name: item.item_name,
+        qty: item.qty,
+        rate: item.rate,
+        amount: item.amount,
+        warehouse: item.warehouse || "",
+        discount_percentage: item.discount_percentage || 0,
+      }));
+
+      const res = await call.post("discount.api.layby.create_layby_sales_order", {
+        items: JSON.stringify(items),
+        customer: activeCustomer || null,
+        pos_profile: activePosProfile || null,
+      });
+
+      const order = res?.message;
+      if (order?.name) {
+        const lines = [
+          "=============================",
+          "         LAYBY RECEIPT",
+          "=============================",
+          `Order     : ${order.name}`,
+          `Date      : ${new Date().toLocaleString()}`,
+          `Customer  : ${activeCustomer || "Walk-in Customer"}`,
+          "-----------------------------",
+          ...items.map((i) => `${i.item_name} x${i.qty}  @ ${i.rate}  = ${i.amount}`),
+          "-----------------------------",
+          `TOTAL     : ${order.currency} ${order.total}`,
+          "=============================",
+          "Thank you for your Layby!",
+          "=============================",
+        ].join("\n");
+
+        const blob = new Blob([lines], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Layby-${order.name}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        alert(`Layby created successfully!\nOrder: ${order.name}\nTotal: ${order.currency} ${order.total}`);
+        startNewTakeAwayOrder();
+      } else {
+        alert("Failed to create Layby. Please try again.");
+      }
+    } catch (err) {
+      console.error("Layby error:", err);
+      alert("Error creating Layby: " + (err?.message || "Unknown error"));
+    } finally {
+      setLaybySaving(false);
+    }
+  };
+
   if (loadingMode) {
     return null;
   }
@@ -117,6 +184,14 @@ const MenuPage = () => {
             Take Away
           </span>
         </label>
+
+        <button
+          onClick={handleLaybyClick}
+          disabled={laybySaving}
+          className="rounded-full border px-3 py-1 text-sm font-medium transition-colors bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+        >
+          {laybySaving ? "Saving..." : "Layby"}
+        </button>
       </div>
       )}
 

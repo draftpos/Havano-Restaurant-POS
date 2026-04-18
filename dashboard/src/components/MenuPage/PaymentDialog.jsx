@@ -37,6 +37,7 @@ export default function PaymentDialog({
   const [total, setTotal] = useState(0);
   const [openMultiCurrencyDialog, setOpenMultiCurrencyDialog] = useState(false);
   const [canPrintInvoice, setCanPrintInvoice] = useState(false);
+  const [enableFiscalisation, setEnableFiscalisation] = useState(false);
   const { selectedReceipt } = useCartStore();
   const { 
   isCreditNote, 
@@ -91,7 +92,8 @@ export default function PaymentDialog({
           setActiveMethod("Cash"); // Always set Cash as default active method
           setPaymentAmounts(methods.reduce((acc, m) => ({ ...acc, [m]: "" }), {}));
         }
-        setCanPrintInvoice(Boolean(doc?.can_print_invoice));
+        setCanPrintInvoice(Number(doc?.can_print_invoice) === 1);
+        setEnableFiscalisation(Number(doc?.enable_fiscalisation) === 1);
         if (methods.length === 0) {
           // Fallback to Cash only if no methods found
           const defaultMethods = ["Cash"];
@@ -151,39 +153,63 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const triggerInvoiceDownload = async (invoiceName, receiptType = "") => {
   if (!canPrintInvoice || !invoiceName) return;
 
-  const steps = [
-    "Sending invoice to ZIMRA...",
-    "Waiting for ZIMRA response...",
-    "Finalising fiscal receipt..."
-  ];
+  if (enableFiscalisation) {
+    // ── Fiscalisation enabled: run full ZIMRA flow + download ──
+    const steps = [
+      "Sending invoice to ZIMRA...",
+      "Waiting for ZIMRA response...",
+      "Finalising fiscal receipt..."
+    ];
 
-  // create one toast
-  const tId = toast.loading(steps[0]);
+    // create one toast
+    const tId = toast.loading(steps[0]);
 
-  try {
-    for (let i = 0; i < steps.length; i++) {
-      toast.loading(steps[i], { id: tId }); // update message
-      await delay(1000); // simulate waiting
+    try {
+      for (let i = 0; i < steps.length; i++) {
+        toast.loading(steps[i], { id: tId }); // update message
+        await delay(1000); // simulate waiting
+      }
+
+      const json = await get_invoice_json(invoiceName);
+      const data = { ...(json || {}), ReceiptType: receiptType || "" };
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${invoiceName}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
+
+      // close the loading toast manually
+      toast.dismiss(tId); // ✅ this will close it
+    } catch (e) {
+      console.error(e);
+      toast.error("Fiscalisation failed", { id: tId }); // replaces loading with error
     }
+  } else {
+    // ── Fiscalisation disabled: show sale notification + download ──
+    try {
+      const json = await get_invoice_json(invoiceName);
+      const data = { ...(json || {}), ReceiptType: receiptType || "" };
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const blobUrl = URL.createObjectURL(blob);
 
-    const json = await get_invoice_json(invoiceName);
-    const data = { ...(json || {}), ReceiptType: receiptType || "" };
-    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-    const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${invoiceName}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
 
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = `${invoiceName}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 500);
-
-    // close the loading toast manually
-    toast.dismiss(tId); // ✅ this will close it
-  } catch (e) {
-    console.error(e);
-    toast.error("Fiscalisation failed", { id: tId }); // replaces loading with error
+      toast.success("Sale completed successfully!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Invoice download failed");
+    }
   }
 };
   // Calculate payment status
